@@ -1,7 +1,12 @@
-FROM node:20-alpine AS base
+FROM node:20-slim AS base
 
 # Install Python for demo parser and OpenSSL for Prisma
-RUN apk add --no-cache python3 py3-pip openssl
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    python3-venv \
+    openssl \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies only when needed
 FROM base AS deps
@@ -38,11 +43,11 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+RUN groupadd --system --gid 1001 nodejs
+RUN useradd --system --uid 1001 nextjs
 
 # Copy Python dependencies
-COPY --from=deps /usr/lib/python3.*/site-packages /usr/lib/python3.12/site-packages
+COPY --from=deps /usr/local/lib/python3.11/dist-packages /usr/local/lib/python3.11/dist-packages
 
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
