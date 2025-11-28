@@ -1,4 +1,4 @@
-import { ParsedDemoData, KillEvent, DamageEvent, PlayerInfo } from './types';
+import { ParsedDemoData, KillEvent } from './types';
 
 /**
  * Extract player statistics from parsed demo data
@@ -176,9 +176,9 @@ export function calculateEntryStats(
  * Calculate clutch statistics
  */
 export function calculateClutchStats(
-  data: ParsedDemoData,
-  steamId: string,
-  playerTeam: number
+  _data: ParsedDemoData,
+  _steamId: string,
+  _playerTeam: number
 ): { clutchesWon: number; clutchesLost: number } {
   // This would require more detailed round state tracking
   // Simplified implementation

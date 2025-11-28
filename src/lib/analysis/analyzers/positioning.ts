@@ -49,7 +49,7 @@ export class PositioningAnalyzer {
 
   private analyzeDeathPositions(
     deaths: KillEvent[],
-    mapName: string
+    _mapName: string
   ): Array<{ x: number; y: number; count: number; isBadPosition: boolean }> {
     // Group deaths by approximate position
     const positionMap: Record<string, { x: number; y: number; count: number }> = {};
@@ -137,8 +137,8 @@ export class PositioningAnalyzer {
   }
 
   private analyzeRotations(
-    positions: PositionSnapshot[],
-    playerSteamId: string
+    _positions: PositionSnapshot[],
+    _playerSteamId: string
   ): { averageSpeed: number; score: number } {
     // Simplified rotation analysis
     return {

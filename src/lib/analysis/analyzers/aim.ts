@@ -5,8 +5,8 @@ export class AimAnalyzer {
   analyze(
     kills: KillEvent[],
     damages: DamageEvent[],
-    positions: PositionSnapshot[],
-    playerSteamId: string
+    _positions: PositionSnapshot[],
+    _playerSteamId: string
   ): AimAnalysis {
     const totalKills = kills.length;
     const headshots = kills.filter((k) => k.headshot).length;
@@ -15,7 +15,7 @@ export class AimAnalyzer {
     // Calculate accuracy from damage events
     const headshotDamages = damages.filter((d) => d.hitgroup === HITGROUP.HEAD);
     const totalHits = damages.length;
-    const headHits = headshotDamages.length;
+    const _headHits = headshotDamages.length;
 
     // Estimate first bullet accuracy
     // Group damages by tick proximity to estimate bursts
@@ -93,7 +93,7 @@ export class AimAnalyzer {
     return firstShots > 0 ? firstShotHeadshots / firstShots : 0.3;
   }
 
-  private estimateSprayControl(kills: KillEvent[], damages: DamageEvent[]): number {
+  private estimateSprayControl(kills: KillEvent[], _damages: DamageEvent[]): number {
     // Estimate based on multi-kill consistency
     const totalKills = kills.length;
     if (totalKills < 5) return 50; // Not enough data

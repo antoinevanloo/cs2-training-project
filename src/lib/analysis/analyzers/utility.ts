@@ -6,7 +6,7 @@ export class UtilityAnalyzer {
     grenades: GrenadeEvent[],
     damages: DamageEvent[],
     kills: KillEvent[],
-    playerSteamId: string
+    _playerSteamId: string
   ): UtilityAnalysis {
     // Count grenades by type
     const flashes = grenades.filter((g) => g.type === 'flash');

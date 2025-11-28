@@ -119,8 +119,8 @@ export class TimingAnalyzer {
   }
 
   private analyzeRotationTiming(
-    positions: PositionSnapshot[],
-    playerSteamId: string
+    _positions: PositionSnapshot[],
+    _playerSteamId: string
   ): { early: number; onTime: number; late: number; score: number } {
     // Without bomb position data, use simplified analysis
     return {

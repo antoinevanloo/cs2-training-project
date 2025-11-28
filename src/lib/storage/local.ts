@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { getUserDemosPath, getDemoFilePath, storageConfig } from './config';
+import { getUserDemosPath, getDemoFilePath } from './config';
 
 /**
  * Ensure the storage directory exists for a user

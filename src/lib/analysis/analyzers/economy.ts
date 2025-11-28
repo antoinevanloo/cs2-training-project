@@ -3,9 +3,9 @@ import { EconomyAnalysis } from '../types';
 
 export class EconomyAnalyzer {
   analyze(
-    economy: EconomySnapshot[],
+    _economy: EconomySnapshot[],
     rounds: RoundInfo[],
-    playerSteamId: string
+    _playerSteamId: string
   ): EconomyAnalysis {
     // Without detailed per-player economy data, we estimate based on round patterns
     const totalRounds = rounds.length;
@@ -69,11 +69,11 @@ export class EconomyAnalyzer {
   } {
     // Identify potential save rounds (after losses, before half)
     let appropriateSaves = 0;
-    let inappropriateSaves = 0;
+    const inappropriateSaves = 0;
 
     for (let i = 1; i < rounds.length; i++) {
-      const prevRound = rounds[i - 1];
-      const currentRound = rounds[i];
+      const _prevRound = rounds[i - 1];
+      const _currentRound = rounds[i];
 
       // After a loss, next round might be a save
       // Half time is round 12/13

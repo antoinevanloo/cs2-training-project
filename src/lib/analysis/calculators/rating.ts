@@ -24,17 +24,17 @@ export function calculateRating(input: RatingInput): number {
   // Impact rating component (simplified)
   const impact = 2.13 * kpr + 0.42 * apr - 0.41;
 
-  // Kill rating component
-  const killRating = kpr / 0.679; // Average KPR at 1.0 rating
+  // Kill rating component (kept for reference)
+  const _killRating = kpr / 0.679; // Average KPR at 1.0 rating
 
-  // Survival rating component
-  const survivalRating = (totalRounds - deaths) / totalRounds / 0.317;
+  // Survival rating component (kept for reference)
+  const _survivalRating = (totalRounds - deaths) / totalRounds / 0.317;
 
-  // KAST rating component
-  const kastRating = (kast / 100) / 0.7; // Average KAST is ~70%
+  // KAST rating component (kept for reference)
+  const _kastRating = (kast / 100) / 0.7; // Average KAST is ~70%
 
-  // ADR rating component
-  const adrRating = adr / 80; // Average ADR at 1.0 rating
+  // ADR rating component (kept for reference)
+  const _adrRating = adr / 80; // Average ADR at 1.0 rating
 
   // Combine components with weights
   const rating =

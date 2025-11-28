@@ -5,7 +5,7 @@ import { KillEvent, RoundInfo } from '@/lib/demo-parser/types';
  */
 export function calculateImpactScore(
   kills: KillEvent[],
-  deaths: KillEvent[],
+  _deaths: KillEvent[],
   rounds: RoundInfo[],
   playerSteamId: string
 ): number {
@@ -61,7 +61,7 @@ export function calculateImpactScore(
 export function calculateTradeRate(
   allKills: KillEvent[],
   playerSteamId: string,
-  playerTeam: number
+  _playerTeam: number
 ): { tradesGiven: number; tradesTaken: number; tradeRate: number } {
   let tradesGiven = 0;
   let tradesTaken = 0;

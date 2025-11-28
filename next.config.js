@@ -12,12 +12,6 @@ const nextConfig = {
       },
     ],
   },
-  // Augmenter la limite pour les uploads de fichiers
-  api: {
-    bodyParser: {
-      sizeLimit: '150mb',
-    },
-  },
 };
 
 module.exports = nextConfig;

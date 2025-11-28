@@ -47,7 +47,7 @@ export class DecisionAnalyzer {
 
   private analyzeClutchPerformance(
     kills: KillEvent[],
-    rounds: any[],
+    _rounds: { roundNumber: number; winner: number; reason: number }[],
     playerSteamId: string
   ): { attempts: number; won: number; score: number } {
     // Simplified clutch detection
@@ -91,9 +91,9 @@ export class DecisionAnalyzer {
   }
 
   private analyzeRetakeDecisions(
-    kills: KillEvent[],
-    rounds: any[],
-    playerSteamId: string
+    _kills: KillEvent[],
+    rounds: { roundNumber: number; winner: number; reason: number }[],
+    _playerSteamId: string
   ): { correct: number; incorrect: number; score: number } {
     // Simplified retake analysis
     // Real implementation would need bomb plant events

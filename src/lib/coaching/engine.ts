@@ -53,15 +53,13 @@ export class CoachingEngine {
 
   private generateWeeklyPlan(
     recommendations: Recommendation[],
-    weaknesses: string[]
+    _weaknesses: string[]
   ): WeeklyPlan {
     const createDayPlan = (focus: string, dayExercises: Exercise[], duration: number): DayPlan => ({
       focus,
       exercises: dayExercises,
       duration,
     });
-
-    const categories = ['aim', 'positioning', 'utility', 'timing', 'decision'];
 
     const getExercisesForCategory = (category: string): Exercise[] => {
       const categoryRecs = recommendations.filter((r) => r.category === category);

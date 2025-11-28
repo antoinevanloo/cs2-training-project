@@ -2,6 +2,7 @@
 
 import { signOut } from 'next-auth/react';
 import { useState, useRef, useEffect } from 'react';
+import Image from 'next/image';
 
 interface HeaderProps {
   user: {
@@ -62,12 +63,14 @@ export function Header({ user }: HeaderProps) {
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
             className="flex items-center gap-3 hover:bg-gray-800/50 rounded-lg p-2 transition-colors"
           >
-            <div className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center">
+            <div className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center overflow-hidden">
               {user.image ? (
-                <img
+                <Image
                   src={user.image}
                   alt={user.name || ''}
-                  className="w-8 h-8 rounded-full"
+                  width={32}
+                  height={32}
+                  className="rounded-full"
                 />
               ) : (
                 <span className="text-sm font-medium text-white">

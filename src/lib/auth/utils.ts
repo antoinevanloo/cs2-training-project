@@ -1,9 +1,8 @@
-import { getServerSession } from 'next-auth';
-import { authOptions } from './config';
+import { auth } from './config';
 import { redirect } from 'next/navigation';
 
 export async function getSession() {
-  return getServerSession(authOptions);
+  return auth();
 }
 
 export async function getCurrentUser() {
@@ -18,7 +17,7 @@ export async function requireAuth() {
     redirect('/login');
   }
 
-  return session.user;
+  return session.user as { id: string; name?: string | null; email?: string | null; image?: string | null };
 }
 
 export async function requireAuthAPI() {
@@ -28,5 +27,5 @@ export async function requireAuthAPI() {
     return null;
   }
 
-  return session.user;
+  return session.user as { id: string; name?: string | null; email?: string | null; image?: string | null };
 }
