@@ -1,13 +1,17 @@
 FROM node:20-alpine AS base
 
-# Install Python for demo parser
-RUN apk add --no-cache python3 py3-pip
+# Install Python for demo parser and OpenSSL for Prisma
+RUN apk add --no-cache python3 py3-pip openssl
 
 # Install dependencies
 FROM base AS deps
 WORKDIR /app
 
+# Copy package files AND prisma schema (needed for postinstall)
 COPY package.json package-lock.json* ./
+COPY prisma ./prisma/
+
+# Install dependencies
 RUN npm ci
 
 # Install Python dependencies
@@ -23,9 +27,6 @@ COPY . .
 # Generate Prisma client
 RUN npx prisma generate
 
-# Compile TypeScript worker
-RUN npx tsc scripts/start-worker.ts --outDir dist/scripts --esModuleInterop --module commonjs --target ES2020 --moduleResolution node --skipLibCheck || true
-
 # Production
 FROM base AS runner
 WORKDIR /app
@@ -36,13 +37,14 @@ RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 worker
 
 # Copy dependencies
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /usr/lib/python3.11/site-packages /usr/lib/python3.11/site-packages
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=deps /usr/lib/python3.*/site-packages /usr/lib/python3.12/site-packages
 
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/src ./src
 COPY --from=builder /app/tsconfig.json ./
+COPY --from=builder /app/package.json ./
 
 # Create data directory
 RUN mkdir -p /data && chown worker:nodejs /data

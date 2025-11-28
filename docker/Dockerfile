@@ -1,13 +1,17 @@
 FROM node:20-alpine AS base
 
-# Install Python for demo parser
-RUN apk add --no-cache python3 py3-pip
+# Install Python for demo parser and OpenSSL for Prisma
+RUN apk add --no-cache python3 py3-pip openssl
 
 # Install dependencies only when needed
 FROM base AS deps
 WORKDIR /app
 
+# Copy package files AND prisma schema (needed for postinstall)
 COPY package.json package-lock.json* ./
+COPY prisma ./prisma/
+
+# Install dependencies (postinstall will run prisma generate)
 RUN npm ci
 
 # Install Python dependencies
@@ -20,7 +24,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Generate Prisma client
+# Generate Prisma client (in case postinstall didn't work)
 RUN npx prisma generate
 
 # Build Next.js
@@ -38,13 +42,15 @@ RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
 # Copy Python dependencies
-COPY --from=deps /usr/lib/python3.11/site-packages /usr/lib/python3.11/site-packages
+COPY --from=deps /usr/lib/python3.*/site-packages /usr/lib/python3.12/site-packages
 
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
 # Create data directory
 RUN mkdir -p /data && chown nextjs:nodejs /data
