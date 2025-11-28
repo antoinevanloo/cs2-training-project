@@ -1,0 +1,52 @@
+FROM node:20-alpine AS base
+
+# Install Python for demo parser
+RUN apk add --no-cache python3 py3-pip
+
+# Install dependencies
+FROM base AS deps
+WORKDIR /app
+
+COPY package.json package-lock.json* ./
+RUN npm ci
+
+# Install Python dependencies
+COPY scripts/demo-parser/requirements.txt ./scripts/demo-parser/
+RUN pip3 install --break-system-packages -r scripts/demo-parser/requirements.txt
+
+# Build
+FROM base AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+# Generate Prisma client
+RUN npx prisma generate
+
+# Compile TypeScript worker
+RUN npx tsc scripts/start-worker.ts --outDir dist/scripts --esModuleInterop --module commonjs --target ES2020 --moduleResolution node --skipLibCheck || true
+
+# Production
+FROM base AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 worker
+
+# Copy dependencies
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /usr/lib/python3.11/site-packages /usr/lib/python3.11/site-packages
+
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/tsconfig.json ./
+
+# Create data directory
+RUN mkdir -p /data && chown worker:nodejs /data
+
+USER worker
+
+CMD ["npx", "tsx", "scripts/start-worker.ts"]

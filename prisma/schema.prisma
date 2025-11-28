@@ -1,0 +1,344 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// UTILISATEURS
+// ============================================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  username      String    @unique
+  passwordHash  String?
+  steamId       String?   @unique
+  steamUsername String?
+  avatarUrl     String?
+
+  // Limites et quotas
+  storageUsedMb Int       @default(0)
+  maxStorageMb  Int       @default(500)
+
+  // Préférences
+  preferredMaps String[]  @default([])
+  preferredRole String?   // "entry", "support", "awp", "lurk", "igl"
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastLoginAt   DateTime?
+
+  // Relations
+  demos         Demo[]
+  sessions      Session[]
+  stats         UserStats?
+
+  @@index([steamId])
+  @@index([email])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expires      DateTime
+
+  @@index([userId])
+}
+
+// ============================================
+// DEMOS ET ANALYSES
+// ============================================
+
+model Demo {
+  id            String     @id @default(cuid())
+  userId        String
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Informations fichier
+  filename      String
+  originalName  String
+  fileSizeMb    Float
+  checksum      String     @unique  // MD5 pour éviter doublons
+
+  // Informations partie
+  mapName       String
+  gameMode      String     @default("competitive")  // competitive, wingman, premier
+  matchDate     DateTime
+  duration      Int        // Durée en secondes
+
+  // Résultat
+  scoreTeam1    Int
+  scoreTeam2    Int
+  playerTeam    Int        // 1 ou 2
+  matchResult   MatchResult
+
+  // Status traitement
+  status        DemoStatus @default(PENDING)
+  statusMessage String?
+  processingStartedAt DateTime?
+  processingCompletedAt DateTime?
+
+  // Stockage
+  localPath     String?
+  isArchived    Boolean    @default(false)
+  archivedAt    DateTime?
+
+  // Métadonnées extraites (JSONB)
+  metadata      Json?
+
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  // Relations
+  analysis      Analysis?
+  playerStats   DemoPlayerStats[]
+  rounds        Round[]
+
+  @@index([userId, matchDate(sort: Desc)])
+  @@index([status])
+  @@index([mapName])
+  @@index([checksum])
+}
+
+enum DemoStatus {
+  PENDING
+  QUEUED
+  PROCESSING
+  ANALYZING
+  COMPLETED
+  FAILED
+}
+
+enum MatchResult {
+  WIN
+  LOSS
+  TIE
+}
+
+// Stats du joueur principal dans la démo
+model DemoPlayerStats {
+  id            String   @id @default(cuid())
+  demoId        String
+  demo          Demo     @relation(fields: [demoId], references: [id], onDelete: Cascade)
+
+  steamId       String
+  playerName    String
+  isMainPlayer  Boolean  @default(false)  // Le joueur qui a uploadé
+  team          Int      // 1 ou 2
+
+  // Stats de base
+  kills         Int
+  deaths        Int
+  assists       Int
+  headshots     Int
+  headshotPercentage Float
+
+  // Stats avancées
+  adr           Float    // Average Damage per Round
+  kast          Float    // Kill/Assist/Survive/Trade percentage
+  rating        Float    // HLTV 2.0 Rating
+
+  // Détails par arme (JSONB)
+  weaponStats   Json     // { "ak47": { kills: 10, hs: 5 }, ... }
+
+  // Impact
+  entryKills    Int      @default(0)
+  entryDeaths   Int      @default(0)
+  clutchesWon   Int      @default(0)
+  clutchesLost  Int      @default(0)
+
+  // Utilitaires
+  flashAssists  Int      @default(0)
+  enemiesFlashed Int     @default(0)
+  utilityDamage Int      @default(0)
+
+  createdAt     DateTime @default(now())
+
+  @@unique([demoId, steamId])
+  @@index([demoId])
+  @@index([isMainPlayer])
+}
+
+model Round {
+  id            String   @id @default(cuid())
+  demoId        String
+  demo          Demo     @relation(fields: [demoId], references: [id], onDelete: Cascade)
+
+  roundNumber   Int
+  winnerTeam    Int      // 1 ou 2
+  winReason     String   // "bomb_exploded", "bomb_defused", "elimination", "time"
+
+  // Économie au début du round
+  team1Money    Int
+  team2Money    Int
+  team1Equipment Int
+  team2Equipment Int
+
+  // Événements clés (JSONB)
+  events        Json     // Array d'événements avec timestamps
+
+  // Positions clés (JSONB, échantillonné)
+  positions     Json?    // Positions des joueurs à intervalles réguliers
+
+  duration      Int      // Durée du round en secondes
+
+  @@unique([demoId, roundNumber])
+  @@index([demoId])
+}
+
+// ============================================
+// ANALYSE DÉTAILLÉE
+// ============================================
+
+model Analysis {
+  id            String   @id @default(cuid())
+  demoId        String   @unique
+  demo          Demo     @relation(fields: [demoId], references: [id], onDelete: Cascade)
+
+  // Scores globaux (0-100)
+  overallScore  Float
+  aimScore      Float
+  positioningScore Float
+  utilityScore  Float
+  economyScore  Float
+  timingScore   Float
+  decisionScore Float
+
+  // Analyse aim détaillée (JSONB)
+  aimAnalysis   Json
+  // {
+  //   crosshairPlacement: { score: 75, headLevelTime: 0.82 },
+  //   reactionTime: { average: 245, best: 180 },
+  //   accuracy: { overall: 0.32, headshot: 0.48 },
+  //   sprayControl: { score: 68, transferSpeed: 0.4 },
+  //   firstBulletAccuracy: 0.41
+  // }
+
+  // Analyse positionnement (JSONB)
+  positioningAnalysis Json
+  // {
+  //   mapControl: { score: 72, avgAreaControlled: 0.35 },
+  //   rotationSpeed: { average: 4.2, optimal: 3.5 },
+  //   deathPositions: [{ x, y, count, isBadPosition }],
+  //   commonMistakes: ["wide_peek", "exposed_angle"]
+  // }
+
+  // Analyse utilité (JSONB)
+  utilityAnalysis Json
+  // {
+  //   flashEfficiency: { thrown: 12, enemiesFlashed: 8, effectiveness: 0.67 },
+  //   smokeUsage: { thrown: 8, usedForExecute: 5 },
+  //   molotovDamage: { thrown: 4, totalDamage: 89 },
+  //   heUsage: { thrown: 6, totalDamage: 145 }
+  // }
+
+  // Analyse économie (JSONB)
+  economyAnalysis Json
+  // {
+  //   buyDecisions: { correct: 18, incorrect: 4, score: 82 },
+  //   saveRounds: { appropriate: 5, inappropriate: 1 },
+  //   impactOnTeam: { positiveRounds: 12, negativeRounds: 3 },
+  //   avgMoneyAtDeath: 2400
+  // }
+
+  // Analyse timing (JSONB)
+  timingAnalysis Json
+  // {
+  //   peekTiming: { score: 71, avgPrefire: false },
+  //   tradeSpeed: { average: 2.1, successful: 0.78 },
+  //   rotationTiming: { early: 3, onTime: 8, late: 2 }
+  // }
+
+  // Analyse décisions (JSONB)
+  decisionAnalysis Json
+  // {
+  //   clutchPerformance: { attempts: 4, won: 2, score: 65 },
+  //   retakeDecisions: { correct: 7, incorrect: 2 },
+  //   aggressionLevel: "balanced", // passive, balanced, aggressive
+  //   riskTaking: { calculated: 8, reckless: 2 }
+  // }
+
+  // Forces et faiblesses identifiées
+  strengths     String[]
+  weaknesses    String[]
+
+  // Comparaison avec moyennes (par rank si disponible)
+  comparisonData Json?
+
+  // Rapport de coaching généré
+  coachingReport Json
+  // {
+  //   priority: [{ area: "aim", issue: "crosshair_placement", severity: "high" }],
+  //   recommendations: [{ ... }],
+  //   exercises: [{ ... }],
+  //   weeklyPlan: { ... }
+  // }
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([demoId])
+}
+
+// ============================================
+// STATISTIQUES AGRÉGÉES (CACHE)
+// ============================================
+
+model UserStats {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Stats globales calculées
+  totalDemos    Int      @default(0)
+  totalMatches  Int      @default(0)
+  totalRounds   Int      @default(0)
+  totalKills    Int      @default(0)
+  totalDeaths   Int      @default(0)
+  totalAssists  Int      @default(0)
+
+  // Moyennes
+  avgRating     Float    @default(0)
+  avgAdr        Float    @default(0)
+  avgKast       Float    @default(0)
+  avgHsPercent  Float    @default(0)
+
+  // Win rate
+  wins          Int      @default(0)
+  losses        Int      @default(0)
+  ties          Int      @default(0)
+  winRate       Float    @default(0)
+
+  // Par map (JSONB)
+  mapStats      Json     @default("{}")
+  // { "de_dust2": { played: 10, winRate: 0.6, avgRating: 1.1 }, ... }
+
+  // Progression (JSONB)
+  ratingHistory Json     @default("[]")
+  // [{ date: "2024-01-15", rating: 1.05 }, ...]
+
+  // Scores d'analyse moyens
+  avgAimScore   Float    @default(0)
+  avgPositioningScore Float @default(0)
+  avgUtilityScore Float  @default(0)
+  avgEconomyScore Float  @default(0)
+
+  lastUpdated   DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ============================================
+// JOBS (géré par pg-boss, tables auto-créées)
+// ============================================
+// pg-boss crée automatiquement ses tables :
+// - pgboss.job
+// - pgboss.schedule
+// - pgboss.version
+// Pas besoin de les définir ici
