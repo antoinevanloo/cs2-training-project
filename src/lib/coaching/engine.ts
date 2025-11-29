@@ -1,4 +1,4 @@
-import { AnalysisResult } from '../analysis/types';
+import { AnalysisResult, AnalysisScores } from '../analysis/types';
 import { allCoachingRules } from './rules';
 import { exercises } from './exercises';
 import { CoachingReport, Recommendation, Exercise, WeeklyPlan, DayPlan } from './types';
@@ -82,13 +82,21 @@ export class CoachingEngine {
 
   private selectExercises(
     recommendations: Recommendation[],
-    scores: Record<string, number>
+    scores: AnalysisScores
   ): Exercise[] {
     const selectedExercises: Exercise[] = [];
 
     // Find weak areas
-    const weakAreas = Object.entries(scores)
-      .filter(([key, score]) => score < 50 && key !== 'overall')
+    const scoreEntries: [string, number][] = [
+      ['aim', scores.aim],
+      ['positioning', scores.positioning],
+      ['utility', scores.utility],
+      ['economy', scores.economy],
+      ['timing', scores.timing],
+      ['decision', scores.decision],
+    ];
+    const weakAreas = scoreEntries
+      .filter(([, score]) => score < 50)
       .sort(([, a], [, b]) => a - b)
       .map(([area]) => area);
 

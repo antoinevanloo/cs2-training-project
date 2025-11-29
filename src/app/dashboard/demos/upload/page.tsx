@@ -50,10 +50,10 @@ export default function UploadPage() {
       return;
     }
 
-    // Vérifier la taille (max 150MB)
-    const maxSize = 150 * 1024 * 1024;
+    // Vérifier la taille (max 300MB)
+    const maxSize = 300 * 1024 * 1024;
     if (file.size > maxSize) {
-      setError('Le fichier ne doit pas dépasser 150 MB');
+      setError('Le fichier ne doit pas dépasser 300 MB');
       return;
     }
 
@@ -192,7 +192,7 @@ export default function UploadPage() {
                   </span>
                 </label>
                 <p className="text-xs text-gray-500">
-                  Fichiers .dem uniquement, max 150 MB
+                  Fichiers .dem uniquement, max 300 MB
                 </p>
               </div>
             )}

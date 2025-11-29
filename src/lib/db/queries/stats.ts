@@ -1,4 +1,5 @@
 import prisma from '../prisma';
+import { Prisma } from '@prisma/client';
 import { MapStats, RatingHistoryEntry } from '../types';
 
 export async function getUserStats(userId: string) {
@@ -133,7 +134,7 @@ export async function updateUserStats(userId: string) {
       ties,
       winRate: totalMatches > 0 ? wins / totalMatches : 0,
       mapStats,
-      ratingHistory,
+      ratingHistory: ratingHistory as unknown as Prisma.InputJsonValue,
       avgAimScore: analysisCount > 0 ? totalAimScore / analysisCount : 0,
       avgPositioningScore: analysisCount > 0 ? totalPositioningScore / analysisCount : 0,
       avgUtilityScore: analysisCount > 0 ? totalUtilityScore / analysisCount : 0,
@@ -156,7 +157,7 @@ export async function updateUserStats(userId: string) {
       ties,
       winRate: totalMatches > 0 ? wins / totalMatches : 0,
       mapStats,
-      ratingHistory,
+      ratingHistory: ratingHistory as unknown as Prisma.InputJsonValue,
       avgAimScore: analysisCount > 0 ? totalAimScore / analysisCount : 0,
       avgPositioningScore: analysisCount > 0 ? totalPositioningScore / analysisCount : 0,
       avgUtilityScore: analysisCount > 0 ? totalUtilityScore / analysisCount : 0,
@@ -196,5 +197,5 @@ export async function getRatingProgression(userId: string) {
     return [];
   }
 
-  return stats.ratingHistory as RatingHistoryEntry[];
+  return stats.ratingHistory as unknown as RatingHistoryEntry[];
 }

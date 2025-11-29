@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   app:
     build:
@@ -47,6 +45,8 @@ services:
 
   db:
     image: postgres:16-alpine
+    ports:
+      - "5432:5432"
     environment:
       - POSTGRES_DB=cs2coach
       - POSTGRES_USER=postgres
