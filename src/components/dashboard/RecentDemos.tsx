@@ -1,6 +1,5 @@
-'use client';
-
 import Link from 'next/link';
+import Image from 'next/image';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 
@@ -93,11 +92,15 @@ export function RecentDemos({ demos }: RecentDemosProps) {
                 className="flex items-center gap-4 p-4 hover:bg-gray-800/30 transition-colors"
               >
                 {/* Map thumbnail */}
-                <div className="w-16 h-10 bg-gray-700 rounded overflow-hidden flex-shrink-0">
+                <div className="relative w-16 h-10 bg-gray-700 rounded overflow-hidden flex-shrink-0">
                   {mapImages[demo.mapName] && (
-                    <div
-                      className="w-full h-full bg-cover bg-center"
-                      style={{ backgroundImage: `url(${mapImages[demo.mapName]})` }}
+                    <Image
+                      src={mapImages[demo.mapName]}
+                      alt={demo.mapName}
+                      fill
+                      sizes="64px"
+                      className="object-cover"
+                      loading="lazy"
                     />
                   )}
                 </div>

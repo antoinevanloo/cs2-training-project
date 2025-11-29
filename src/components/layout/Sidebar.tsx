@@ -2,6 +2,11 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { Shield } from 'lucide-react';
+
+interface SidebarProps {
+  isAdmin?: boolean;
+}
 
 const navigation = [
   {
@@ -61,8 +66,16 @@ const navigation = [
   },
 ];
 
-export function Sidebar() {
+function getActiveHref(pathname: string): string | undefined {
+  return navigation
+    .filter((item) => pathname === item.href || pathname.startsWith(item.href + '/'))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
+}
+
+export function Sidebar({ isAdmin = false }: SidebarProps) {
   const pathname = usePathname();
+  const activeHref = getActiveHref(pathname);
+  const isAdminPage = pathname.startsWith('/dashboard/admin');
 
   return (
     <>
@@ -80,7 +93,7 @@ export function Sidebar() {
           {/* Navigation */}
           <nav className="flex-1 px-3 py-4 space-y-1">
             {navigation.map((item) => {
-              const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+              const isActive = item.href === activeHref;
               return (
                 <Link
                   key={item.name}
@@ -96,6 +109,24 @@ export function Sidebar() {
                 </Link>
               );
             })}
+
+            {/* Admin Link */}
+            {isAdmin && (
+              <>
+                <div className="my-4 border-t border-gray-800" />
+                <Link
+                  href="/dashboard/admin"
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                    isAdminPage
+                      ? 'bg-red-500/20 text-red-400'
+                      : 'text-red-400/70 hover:text-red-400 hover:bg-red-500/10'
+                  }`}
+                >
+                  <Shield className="w-5 h-5" />
+                  <span>Admin</span>
+                </Link>
+              </>
+            )}
           </nav>
 
           {/* Storage Info */}
@@ -116,7 +147,7 @@ export function Sidebar() {
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-gray-900/95 backdrop-blur-sm border-t border-gray-800 z-50">
         <div className="flex justify-around py-2">
           {navigation.slice(0, 5).map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+            const isActive = item.href === activeHref;
             return (
               <Link
                 key={item.name}
