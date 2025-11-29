@@ -20,13 +20,26 @@ model User {
   steamUsername String?
   avatarUrl     String?
 
-  // Limites et quotas
-  storageUsedMb Int       @default(0)
-  maxStorageMb  Int       @default(500)
+  // Rôle système et abonnement
+  systemRole        SystemRole       @default(USER)
+  subscriptionTier  SubscriptionTier @default(FREE)
+  subscriptionExpiresAt DateTime?    // null = pas d'expiration (FREE ou lifetime)
+  stripeCustomerId  String?          @unique  // Pour Stripe
+  stripeSubscriptionId String?       // ID de l'abonnement Stripe actif
+
+  // Limites et quotas (calculés dynamiquement selon le tier, mais overridable)
+  storageUsedMb     Int       @default(0)
+  maxStorageMb      Int       @default(500)    // Override possible par admin
+  demosThisMonth    Int       @default(0)
+  demosResetAt      DateTime  @default(now())  // Reset mensuel
 
   // Préférences
   preferredMaps String[]  @default([])
-  preferredRole String?   // "entry", "support", "awp", "lurk", "igl"
+
+  // Rôle et rang du joueur (pour le coaching contextuel)
+  role          PlayerRole?  // Rôle principal du joueur
+  rank          CS2Rank?     // Rang actuel
+  targetRank    CS2Rank?     // Rang cible pour la comparaison
 
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -37,8 +50,29 @@ model User {
   sessions      Session[]
   stats         UserStats?
 
+  // Relations équipe (préparé pour le futur)
+  teamMemberships TeamMember[]
+  ownedTeams      Team[]       @relation("TeamOwner")
+
   @@index([steamId])
   @@index([email])
+  @@index([systemRole])
+  @@index([subscriptionTier])
+}
+
+// Rôle système (permissions plateforme)
+enum SystemRole {
+  USER           // Utilisateur standard
+  ADMIN          // Administrateur plateforme
+}
+
+// Niveau d'abonnement
+enum SubscriptionTier {
+  FREE           // Gratuit, limité
+  PRO            // Payant, fonctionnalités complètes
+  PRO_PLUS       // Premium, coaching IA avancé
+  TEAM           // Plan équipe (attribué via Team)
+  ENTERPRISE     // Sur mesure
 }
 
 model Session {
@@ -119,6 +153,32 @@ enum MatchResult {
   WIN
   LOSS
   TIE
+}
+
+// Rôles de joueur CS2
+enum PlayerRole {
+  ENTRY      // Entry fragger
+  AWPER      // Sniper
+  LURKER     // Lurk
+  SUPPORT    // Support/Flash
+  IGL        // In-game leader
+  RIFLER     // Rifler polyvalent (défaut)
+}
+
+// Rangs CS2
+enum CS2Rank {
+  SILVER
+  GOLD_NOVA
+  MASTER_GUARDIAN
+  LEGENDARY_EAGLE
+  SUPREME
+  GLOBAL
+  // Premier ranks (ELO)
+  PREMIER_0_5000
+  PREMIER_5000_10000
+  PREMIER_10000_15000
+  PREMIER_15000_20000
+  PREMIER_20000_PLUS
 }
 
 // Stats du joueur principal dans la démo
@@ -330,6 +390,293 @@ model UserStats {
   avgEconomyScore Float  @default(0)
 
   lastUpdated   DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ============================================
+// ÉQUIPES (préparé pour évolution future)
+// ============================================
+
+model Team {
+  id          String   @id @default(cuid())
+  name        String
+  tag         String   // Ex: "NaVi", "G2" (max 5 chars)
+  avatarUrl   String?
+  description String?
+
+  // Propriétaire de l'équipe
+  ownerId     String
+  owner       User     @relation("TeamOwner", fields: [ownerId], references: [id])
+
+  // Abonnement équipe
+  subscriptionTier  SubscriptionTier @default(TEAM)
+  subscriptionExpiresAt DateTime?
+  stripeSubscriptionId String?
+
+  // Limites
+  maxMembers  Int      @default(7)
+
+  // Membres
+  members     TeamMember[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([ownerId])
+}
+
+model TeamMember {
+  id        String   @id @default(cuid())
+
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Rôle dans l'équipe
+  teamRole  TeamRole @default(PLAYER)
+
+  // Permissions spécifiques (override du rôle)
+  canUploadDemos    Boolean @default(true)
+  canViewAllDemos   Boolean @default(false)
+  canManageMembers  Boolean @default(false)
+  canEditSettings   Boolean @default(false)
+
+  joinedAt  DateTime @default(now())
+
+  @@unique([teamId, userId])
+  @@index([teamId])
+  @@index([userId])
+}
+
+// Rôle dans une équipe
+enum TeamRole {
+  PLAYER     // Joueur standard
+  COACH      // Coach - peut voir tous les joueurs
+  ANALYST    // Analyste - lecture seule
+  MANAGER    // Manager - gestion équipe
+  OWNER      // Propriétaire - tous les droits
+}
+
+// ============================================
+// CONFIGURATION SYSTÈME
+// ============================================
+
+model SystemConfig {
+  id        String   @id @default(cuid())
+  key       String   @unique  // Ex: "coaching_features", "notification_settings"
+  value     Json     // Configuration stockée en JSON
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([key])
+}
+
+// ============================================
+// PROGRESSION & COACHING ACTIONNABLE
+// ============================================
+
+// Objectifs de progression du joueur
+model PlayerGoal {
+  id            String   @id @default(cuid())
+  userId        String
+
+  // Objectif
+  category      String   // aim, positioning, utility, etc.
+  metric        String   // headshotPercentage, isolatedDeathRate, etc.
+  description   String
+
+  // Valeurs
+  startValue    Float
+  currentValue  Float
+  targetValue   Float
+
+  // Status
+  status        GoalStatus @default(ACTIVE)
+  progress      Float      @default(0) // 0-100%
+
+  // Lien avec insight
+  insightId     String?
+
+  // Dates
+  createdAt     DateTime @default(now())
+  deadline      DateTime?
+  completedAt   DateTime?
+
+  // Relations - user relation via implicit many-to-many
+  snapshots     ProgressSnapshot[]
+
+  @@index([userId, status])
+  @@index([category])
+}
+
+enum GoalStatus {
+  ACTIVE
+  COMPLETED
+  FAILED
+  PAUSED
+}
+
+// Snapshots de progression (historique des métriques)
+model ProgressSnapshot {
+  id            String   @id @default(cuid())
+  userId        String
+
+  // Lien optionnel avec une démo
+  demoId        String?
+
+  // Lien optionnel avec un objectif
+  goalId        String?
+  goal          PlayerGoal? @relation(fields: [goalId], references: [id], onDelete: SetNull)
+
+  // Métriques capturées (JSONB)
+  metrics       Json
+  // {
+  //   aim: { headshotPercentage: 45, reactionTime: 250, ... },
+  //   positioning: { isolatedDeathRate: 0.3, mapControlScore: 65, ... },
+  //   utility: { flashEfficiency: 0.45, ... },
+  //   ...
+  // }
+
+  // Scores
+  overallScore  Float
+  aimScore      Float
+  positioningScore Float
+  utilityScore  Float
+  economyScore  Float
+  timingScore   Float
+  decisionScore Float
+
+  // Contexte
+  rank          CS2Rank?
+  targetRank    CS2Rank?
+  map           String?
+
+  createdAt     DateTime @default(now())
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([goalId])
+}
+
+// Exercices complétés par le joueur
+model ExerciseCompletion {
+  id            String   @id @default(cuid())
+  userId        String
+
+  // Exercice
+  exerciseId    String   // ID de l'exercice (aim_botz, prefire_mirage, etc.)
+  exerciseName  String
+  exerciseType  String   // workshop_map, community_server, theory, etc.
+  category      String   // aim, positioning, utility, etc.
+
+  // Durée et résultat
+  duration      Int      // minutes
+  completed     Boolean  @default(true)
+
+  // Performance (optionnel)
+  performance   Json?    // { score: 80, kills: 150, hsRate: 70, ... }
+
+  // Notes du joueur
+  notes         String?
+
+  // Lien avec objectif
+  goalId        String?
+
+  createdAt     DateTime @default(now())
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([exerciseId])
+  @@index([category])
+}
+
+// Sessions de coaching (rapports générés)
+model CoachingSession {
+  id            String   @id @default(cuid())
+  userId        String
+  demoId        String?
+
+  // Type de session
+  type          CoachingSessionType @default(DEMO_ANALYSIS)
+
+  // Rapport complet (JSONB)
+  report        Json
+  // {
+  //   executiveSummary: { ... },
+  //   insights: [ ... ],
+  //   rankComparison: { ... },
+  //   actionPlan: { ... },
+  //   ...
+  // }
+
+  // Résumé
+  overallScore  Float
+  mainStrength  String
+  mainWeakness  String
+  focusArea     String
+
+  // Insights générés
+  insightsCount Int      @default(0)
+  criticalCount Int      @default(0)
+
+  // Contexte
+  playerRank    CS2Rank?
+  targetRank    CS2Rank?
+  playerRole    PlayerRole?
+  map           String?
+
+  createdAt     DateTime @default(now())
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([demoId])
+}
+
+enum CoachingSessionType {
+  DEMO_ANALYSIS      // Analyse d'une démo
+  WEEKLY_REVIEW      // Revue hebdomadaire
+  GOAL_CHECK         // Vérification d'objectif
+  PROGRESS_REPORT    // Rapport de progression
+}
+
+// Plan d'entraînement actif
+model TrainingPlan {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+
+  // Focus actuel
+  primaryFocus  String
+  secondaryFocus String?
+
+  // Plan hebdomadaire (JSONB)
+  weeklyPlan    Json
+  // {
+  //   monday: { focus: "aim", exercises: [...], duration: 30 },
+  //   tuesday: { focus: "positioning", exercises: [...], duration: 30 },
+  //   ...
+  // }
+
+  // Routine quotidienne (JSONB)
+  dailyRoutine  Json
+  // {
+  //   warmup: [...],
+  //   mainTraining: [...],
+  //   cooldown: [...]
+  // }
+
+  // Objectifs de la semaine
+  weeklyGoals   Json     @default("[]")
+
+  // Status
+  isActive      Boolean  @default(true)
+
+  // Dates
+  startDate     DateTime @default(now())
+  endDate       DateTime?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([userId])
 }

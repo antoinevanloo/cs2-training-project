@@ -54,21 +54,65 @@ def get_round_for_tick(tick: int, round_ticks: list) -> int:
 
 
 def extract_metadata(parser: DemoParser) -> dict:
-    """Extrait les métadonnées de la partie."""
+    """Extrait les métadonnées de la partie, incluant la date du match si disponible."""
     try:
         header = parser.parse_header()
+
+        # Chercher la date du match dans les convars
+        match_date = None
+        try:
+            convars = parser.parse_convars()
+            # Debug: afficher les convars disponibles pour trouver la date
+            # print("Convars disponibles:", list(convars.keys()))
+
+            # Chercher des convars qui pourraient contenir un timestamp
+            date_convars = [
+                'sv_server_start_time',
+                'server_start_time',
+                'match_start_time',
+                'game_start_time',
+                'sv_steamdatagramtransport_port',  # parfois contient un timestamp
+            ]
+
+            for cvar in date_convars:
+                if cvar in convars and convars[cvar]:
+                    try:
+                        ts = float(convars[cvar])
+                        if ts > 1000000000:  # Timestamp Unix valide (après 2001)
+                            from datetime import datetime
+                            match_date = datetime.fromtimestamp(ts).isoformat()
+                            break
+                    except (ValueError, TypeError):
+                        pass
+
+            # Si pas trouvé, chercher n'importe quel convar avec un timestamp valide
+            if not match_date:
+                for key, value in convars.items():
+                    if 'time' in key.lower() or 'date' in key.lower() or 'stamp' in key.lower():
+                        try:
+                            ts = float(value)
+                            if 1500000000 < ts < 2000000000:  # Entre 2017 et 2033
+                                from datetime import datetime
+                                match_date = datetime.fromtimestamp(ts).isoformat()
+                                break
+                        except (ValueError, TypeError):
+                            pass
+
+        except Exception:
+            pass
+
         return {
             "map": header.get("map_name", "unknown"),
             "duration": header.get("playback_time", 0),
             "tickrate": header.get("tickrate", 64),
-            "date": None,
+            "matchDate": match_date,
         }
     except Exception as e:
         return {
             "map": "unknown",
             "duration": 0,
             "tickrate": 64,
-            "date": None,
+            "matchDate": None,
             "error": str(e)
         }
 

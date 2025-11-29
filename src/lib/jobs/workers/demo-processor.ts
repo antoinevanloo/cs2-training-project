@@ -86,18 +86,33 @@ export function registerDemoProcessorWorker(boss: PgBoss): void {
         const matchResult = determineMatchResult(parsedData, playerTeam);
 
         // Update demo metadata
+        const updateData: Record<string, unknown> = {
+          status: 'ANALYZING',
+          mapName: parsedData.metadata.map,
+          duration: Math.round(parsedData.metadata.duration),
+          scoreTeam1: matchResult.scoreTeam1,
+          scoreTeam2: matchResult.scoreTeam2,
+          playerTeam,
+          matchResult: matchResult.result,
+          metadata: parsedData.metadata,
+        };
+
+        // Utiliser la date du match extraite du fichier .dem si disponible
+        if (parsedData.metadata.matchDate) {
+          try {
+            const extractedDate = new Date(parsedData.metadata.matchDate);
+            if (!isNaN(extractedDate.getTime())) {
+              updateData.matchDate = extractedDate;
+              console.log(`[Job ${job.id}] Match date from demo: ${extractedDate.toISOString()}`);
+            }
+          } catch {
+            // Garder la date de file.lastModified définie à l'upload
+          }
+        }
+
         await prisma.demo.update({
           where: { id: demoId },
-          data: {
-            status: 'ANALYZING',
-            mapName: parsedData.metadata.map,
-            duration: Math.round(parsedData.metadata.duration),
-            scoreTeam1: matchResult.scoreTeam1,
-            scoreTeam2: matchResult.scoreTeam2,
-            playerTeam,
-            matchResult: matchResult.result,
-            metadata: parsedData.metadata as any,
-          },
+          data: updateData,
         });
 
         // Create player stats

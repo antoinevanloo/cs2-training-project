@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
-import { DeleteDemoButton } from './DeleteDemoButton';
+import { DemoCardActions, type DemoStatus } from './DemoCardActions';
 
 interface DemoCardProps {
   demo: {
@@ -121,12 +121,13 @@ export function DemoCard({ demo }: DemoCardProps) {
           )}
         </Link>
 
-        {/* Delete Button */}
+        {/* Quick Actions */}
         <div className="flex-shrink-0">
-          <DeleteDemoButton
+          <DemoCardActions
             demoId={demo.id}
             demoName={`${demo.mapName} - ${demo.scoreTeam1}:${demo.scoreTeam2}`}
-            variant="icon"
+            status={demo.status as DemoStatus}
+            hasAnalysis={!!demo.analysis}
           />
         </div>
       </div>

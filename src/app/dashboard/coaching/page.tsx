@@ -1,18 +1,72 @@
 import { requireAuth } from '@/lib/auth/utils';
 import { getAnalysesByUserId, getWeaknessesFrequency } from '@/lib/db/queries/analyses';
+import { loadFeaturesFromDB } from '@/lib/coaching/config/persistence';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { exercises } from '@/lib/coaching/exercises';
+
+// Mapping des noms de catégories vers les clés de features
+const categoryMapping: Record<string, string> = {
+  aim: 'aim',
+  Aim: 'aim',
+  positioning: 'positioning',
+  Positionnement: 'positioning',
+  utility: 'utility',
+  Utilitaires: 'utility',
+  economy: 'economy',
+  'Économie': 'economy',
+  timing: 'timing',
+  Timing: 'timing',
+  decision: 'decision',
+  'Décisions': 'decision',
+};
 
 export default async function CoachingPage() {
   const user = await requireAuth();
 
-  const [analyses, weaknessesFreq] = await Promise.all([
+  const [analyses, weaknessesFreq, features] = await Promise.all([
     getAnalysesByUserId(user.id, 5),
     getWeaknessesFrequency(user.id),
+    loadFeaturesFromDB(),
   ]);
 
+  // Déterminer les catégories activées
+  const enabledCategories = new Set(
+    Object.entries(features.categories)
+      .filter(([_, config]) => config.enabled)
+      .map(([key]) => key)
+  );
+
+  const isCategoryEnabled = (categoryName: string): boolean => {
+    const normalizedCategory = categoryMapping[categoryName] || categoryName.toLowerCase();
+    return enabledCategories.has(normalizedCategory);
+  };
+
   const latestAnalysis = analyses[0];
-  const coachingReport = latestAnalysis?.coachingReport as any;
+  const rawCoachingReport = latestAnalysis?.coachingReport as any;
+
+  // Filtrer le rapport de coaching selon les features activées
+  const coachingReport = rawCoachingReport ? {
+    ...rawCoachingReport,
+    priorityIssues: rawCoachingReport.priorityIssues?.filter((item: any) =>
+      isCategoryEnabled(item.area || item.category || '')
+    ),
+    recommendations: rawCoachingReport.recommendations?.filter((rec: any) => {
+      if (typeof rec === 'string') return true;
+      return isCategoryEnabled(rec.category || rec.area || '');
+    }),
+  } : null;
+
+  // Filtrer les faiblesses récurrentes
+  const filteredWeaknessesFreq = weaknessesFreq.filter((w) => {
+    const categoryKeywords = ['aim', 'positioning', 'utility', 'economy', 'timing', 'decision'];
+    const lowerName = w.name.toLowerCase();
+    for (const keyword of categoryKeywords) {
+      if (lowerName.includes(keyword) && !isCategoryEnabled(keyword)) {
+        return false;
+      }
+    }
+    return true;
+  });
 
   return (
     <div className="space-y-6 pb-20 lg:pb-0">
@@ -121,15 +175,15 @@ export default async function CoachingPage() {
             </Card>
           )}
 
-          {/* Weaknesses Frequency */}
-          {weaknessesFreq.length > 0 && (
+          {/* Weaknesses Frequency (filtrées selon features activées) */}
+          {filteredWeaknessesFreq.length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle>Faiblesses récurrentes</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {weaknessesFreq.slice(0, 5).map((weakness) => (
+                  {filteredWeaknessesFreq.slice(0, 5).map((weakness) => (
                     <div
                       key={weakness.name}
                       className="flex items-center justify-between p-2 bg-gray-900/30 rounded"

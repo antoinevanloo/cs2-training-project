@@ -16,21 +16,36 @@ const maps = [
   { value: 'de_vertigo', label: 'Vertigo' },
 ];
 
-const roles = [
-  { value: 'entry', label: 'Entry Fragger' },
-  { value: 'support', label: 'Support' },
-  { value: 'awp', label: 'AWPer' },
-  { value: 'lurk', label: 'Lurker' },
-  { value: 'igl', label: 'IGL' },
-];
+interface RoleOption {
+  value: string;
+  label: string;
+}
+
+interface TierLimits {
+  demosPerMonth: number;
+  historyDays: number;
+  storageMaxMb: number;
+}
 
 interface UserSettings {
   username: string;
   steamId: string | null;
-  preferredRole: string | null;
+  role: string | null;
+  rank: string | null;
   preferredMaps: string[];
   storageUsedMb: number;
   maxStorageMb: number;
+  availableRoles?: RoleOption[];
+  availableRanks?: RoleOption[];
+  // Subscription info
+  systemRole: string;
+  subscriptionTier: string;
+  subscriptionExpiresAt: string | null;
+  demosThisMonth: number;
+  effectiveTier: string;
+  tierName: string;
+  tierLimits: TierLimits;
+  tierFeatures: string[];
 }
 
 export default function SettingsPage() {
@@ -40,10 +55,21 @@ export default function SettingsPage() {
 
   const [username, setUsername] = useState('');
   const [steamId, setSteamId] = useState('');
-  const [preferredRole, setPreferredRole] = useState('');
+  const [role, setRole] = useState('');
+  const [rank, setRank] = useState('');
   const [preferredMaps, setPreferredMaps] = useState<string[]>([]);
   const [storageUsedMb, setStorageUsedMb] = useState(0);
   const [maxStorageMb, setMaxStorageMb] = useState(500);
+  const [availableRoles, setAvailableRoles] = useState<RoleOption[]>([]);
+  const [availableRanks, setAvailableRanks] = useState<RoleOption[]>([]);
+
+  // Subscription state
+  const [tierName, setTierName] = useState('Free');
+  const [effectiveTier, setEffectiveTier] = useState('FREE');
+  const [demosThisMonth, setDemosThisMonth] = useState(0);
+  const [tierLimits, setTierLimits] = useState<TierLimits>({ demosPerMonth: 3, historyDays: 7, storageMaxMb: 200 });
+  const [subscriptionExpiresAt, setSubscriptionExpiresAt] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Charger les données utilisateur
   useEffect(() => {
@@ -54,10 +80,20 @@ export default function SettingsPage() {
           const data: UserSettings = await response.json();
           setUsername(data.username || '');
           setSteamId(data.steamId || '');
-          setPreferredRole(data.preferredRole || '');
+          setRole(data.role || '');
+          setRank(data.rank || '');
           setPreferredMaps(data.preferredMaps || []);
           setStorageUsedMb(data.storageUsedMb || 0);
           setMaxStorageMb(data.maxStorageMb || 500);
+          setAvailableRoles(data.availableRoles || []);
+          setAvailableRanks(data.availableRanks || []);
+          // Subscription info
+          setTierName(data.tierName || 'Free');
+          setEffectiveTier(data.effectiveTier || 'FREE');
+          setDemosThisMonth(data.demosThisMonth || 0);
+          setTierLimits(data.tierLimits || { demosPerMonth: 3, historyDays: 7, storageMaxMb: 200 });
+          setSubscriptionExpiresAt(data.subscriptionExpiresAt);
+          setIsAdmin(data.systemRole === 'ADMIN');
         }
       } catch (error) {
         console.error('Failed to fetch settings:', error);
@@ -89,7 +125,8 @@ export default function SettingsPage() {
         body: JSON.stringify({
           username,
           steamId: steamId || null,
-          preferredRole: preferredRole || null,
+          role: role || null,
+          rank: rank || null,
           preferredMaps,
         }),
       });
@@ -139,6 +176,110 @@ export default function SettingsPage() {
           {message.text}
         </div>
       )}
+
+      {/* Subscription Card */}
+      <Card className="mb-6">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Abonnement</CardTitle>
+            <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+              effectiveTier === 'FREE' ? 'bg-gray-600 text-gray-200' :
+              effectiveTier === 'PRO' ? 'bg-blue-600 text-white' :
+              effectiveTier === 'PRO_PLUS' ? 'bg-purple-600 text-white' :
+              effectiveTier === 'TEAM' ? 'bg-green-600 text-white' :
+              'bg-yellow-600 text-black'
+            }`}>
+              {tierName}
+              {isAdmin && ' (Admin)'}
+            </span>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {/* Demos this month */}
+            <div>
+              <div className="flex justify-between text-sm mb-1">
+                <span className="text-gray-400">Demos ce mois</span>
+                <span className="text-white">
+                  {tierLimits.demosPerMonth === -1 ? (
+                    <>{demosThisMonth} / Illimité</>
+                  ) : (
+                    <>{demosThisMonth} / {tierLimits.demosPerMonth}</>
+                  )}
+                </span>
+              </div>
+              {tierLimits.demosPerMonth !== -1 && (
+                <div className="w-full bg-gray-700 rounded-full h-2">
+                  <div
+                    className={`h-2 rounded-full transition-all ${
+                      demosThisMonth >= tierLimits.demosPerMonth ? 'bg-red-500' : 'bg-cs2-accent'
+                    }`}
+                    style={{ width: `${Math.min((demosThisMonth / tierLimits.demosPerMonth) * 100, 100)}%` }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Expiration */}
+            {subscriptionExpiresAt && effectiveTier !== 'FREE' && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-400">Expire le</span>
+                <span className="text-white">
+                  {new Date(subscriptionExpiresAt).toLocaleDateString('fr-FR', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                  })}
+                </span>
+              </div>
+            )}
+
+            {/* Features */}
+            <div>
+              <p className="text-sm text-gray-400 mb-2">Fonctionnalités incluses :</p>
+              <div className="flex flex-wrap gap-2">
+                {effectiveTier === 'FREE' ? (
+                  <>
+                    <span className="px-2 py-1 bg-gray-700 rounded text-xs text-gray-300">Stats de base</span>
+                    <span className="px-2 py-1 bg-gray-700 rounded text-xs text-gray-300">Conseils basiques</span>
+                  </>
+                ) : effectiveTier === 'PRO' ? (
+                  <>
+                    <span className="px-2 py-1 bg-blue-900/50 rounded text-xs text-blue-300">Analyse complète</span>
+                    <span className="px-2 py-1 bg-blue-900/50 rounded text-xs text-blue-300">Coaching avancé</span>
+                    <span className="px-2 py-1 bg-blue-900/50 rounded text-xs text-blue-300">Export PDF</span>
+                    <span className="px-2 py-1 bg-blue-900/50 rounded text-xs text-blue-300">Suivi progression</span>
+                  </>
+                ) : effectiveTier === 'PRO_PLUS' ? (
+                  <>
+                    <span className="px-2 py-1 bg-purple-900/50 rounded text-xs text-purple-300">Tout PRO +</span>
+                    <span className="px-2 py-1 bg-purple-900/50 rounded text-xs text-purple-300">Coaching IA</span>
+                    <span className="px-2 py-1 bg-purple-900/50 rounded text-xs text-purple-300">Comparaison Pro</span>
+                  </>
+                ) : (
+                  <span className="px-2 py-1 bg-green-900/50 rounded text-xs text-green-300">Toutes les fonctionnalités</span>
+                )}
+              </div>
+            </div>
+
+            {/* Upgrade CTA */}
+            {effectiveTier === 'FREE' && (
+              <div className="pt-2 border-t border-gray-700">
+                <Button
+                  type="button"
+                  className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500"
+                  onClick={() => {/* TODO: redirect to pricing page */}}
+                >
+                  Passer à Pro - 6€/mois
+                </Button>
+                <p className="text-xs text-gray-500 text-center mt-2">
+                  Demos illimités, analyse complète, suivi de progression
+                </p>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       <form onSubmit={handleSubmit}>
         {/* Profile */}
@@ -191,22 +332,51 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Preferences */}
+        {/* Rôle et Rang */}
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>Préférences de jeu</CardTitle>
+            <CardTitle>Profil de joueur</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Select
-              label="Rôle principal"
-              value={preferredRole}
-              onChange={(e) => setPreferredRole(e.target.value)}
-              options={[{ value: '', label: 'Sélectionner...' }, ...roles]}
-            />
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Maps préférées
-              </label>
+              <Select
+                label="Rôle principal"
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                options={[
+                  { value: '', label: 'Non défini' },
+                  ...availableRoles,
+                ]}
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Votre rôle influence les conseils de coaching. Un AWPer isolé ou un Entry qui meurt beaucoup ne recevront pas les mêmes alertes.
+              </p>
+            </div>
+
+            <div>
+              <Select
+                label="Rang actuel"
+                value={rank}
+                onChange={(e) => setRank(e.target.value)}
+                options={[
+                  { value: '', label: 'Non défini' },
+                  ...availableRanks,
+                ]}
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Les attentes sont ajustées selon votre rang. Un Silver n&apos;a pas les mêmes standards qu&apos;un Global.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Maps préférées */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Maps préférées</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
               <div className="grid grid-cols-2 gap-2">
                 {maps.map((map) => (
                   <label
@@ -237,18 +407,29 @@ export default function SettingsPage() {
               <div className="flex justify-between text-sm">
                 <span className="text-gray-400">Espace utilisé</span>
                 <span className="text-white">
-                  {storageUsedMb.toFixed(1)} MB / {maxStorageMb} MB
+                  {tierLimits.storageMaxMb === -1 ? (
+                    <>{storageUsedMb.toFixed(1)} MB / Illimité</>
+                  ) : (
+                    <>{storageUsedMb.toFixed(1)} MB / {tierLimits.storageMaxMb} MB</>
+                  )}
                 </span>
               </div>
-              <div className="w-full bg-gray-700 rounded-full h-2">
-                <div
-                  className="bg-cs2-accent h-2 rounded-full transition-all"
-                  style={{ width: `${Math.min(storagePercentage, 100)}%` }}
-                />
-              </div>
+              {tierLimits.storageMaxMb !== -1 && (
+                <div className="w-full bg-gray-700 rounded-full h-2">
+                  <div
+                    className={`h-2 rounded-full transition-all ${
+                      storagePercentage >= 90 ? 'bg-red-500' : 'bg-cs2-accent'
+                    }`}
+                    style={{ width: `${Math.min(storagePercentage, 100)}%` }}
+                  />
+                </div>
+              )}
               <p className="text-xs text-gray-500">
-                Les demos sont automatiquement archivées après 7 jours et supprimées
-                après 30 jours.
+                {tierLimits.historyDays === -1 ? (
+                  'Historique illimité avec votre abonnement.'
+                ) : (
+                  `Les demos sont visibles pendant ${tierLimits.historyDays} jours. Passez à Pro pour un historique illimité.`
+                )}
               </p>
             </div>
           </CardContent>

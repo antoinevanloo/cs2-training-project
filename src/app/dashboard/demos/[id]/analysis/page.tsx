@@ -1,11 +1,38 @@
 import { requireAuth } from '@/lib/auth/utils';
 import { getAnalysisByDemoId } from '@/lib/db/queries/analyses';
 import { getDemoById } from '@/lib/db/queries/demos';
+import { loadFeaturesFromDB } from '@/lib/coaching/config/persistence';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { CircularProgress } from '@/components/ui/Progress';
+
+// Mapping des noms de catégories vers les clés de features
+const categoryMapping: Record<string, string> = {
+  aim: 'aim',
+  Aim: 'aim',
+  AIM: 'aim',
+  positioning: 'positioning',
+  Positionnement: 'positioning',
+  position: 'positioning',
+  POSITIONING: 'positioning',
+  utility: 'utility',
+  Utilitaires: 'utility',
+  utilities: 'utility',
+  UTILITY: 'utility',
+  economy: 'economy',
+  'Économie': 'economy',
+  eco: 'economy',
+  ECONOMY: 'economy',
+  timing: 'timing',
+  Timing: 'timing',
+  TIMING: 'timing',
+  decision: 'decision',
+  'Décisions': 'decision',
+  decisions: 'decision',
+  DECISION: 'decision',
+};
 
 interface AnalysisPageProps {
   params: { id: string };
@@ -152,8 +179,61 @@ export default async function AnalysisPage({ params }: AnalysisPageProps) {
     );
   }
 
+  // Charger les features pour filtrer le coaching
+  const features = await loadFeaturesFromDB();
+  const enabledCategories = new Set(
+    Object.entries(features.categories)
+      .filter(([_, config]) => config.enabled)
+      .map(([key]) => key)
+  );
+
+  // Helper pour vérifier si une catégorie est activée
+  const isCategoryEnabled = (categoryName: string): boolean => {
+    const normalizedCategory = categoryMapping[categoryName] || categoryName.toLowerCase();
+    return enabledCategories.has(normalizedCategory);
+  };
+
   const analysis = demo.analysis;
-  const coachingReport = analysis.coachingReport as any;
+  const rawCoachingReport = analysis.coachingReport as any;
+
+  // Filtrer les données de coaching selon les features activées
+  const filteredStrengths = analysis.strengths?.filter((s: string) => {
+    // Les forces sont souvent des strings, on essaie de détecter la catégorie
+    const categoryKeywords = ['aim', 'positioning', 'utility', 'economy', 'timing', 'decision'];
+    const lowerS = s.toLowerCase();
+    for (const keyword of categoryKeywords) {
+      if (lowerS.includes(keyword) && !isCategoryEnabled(keyword)) {
+        return false;
+      }
+    }
+    return true;
+  }) || [];
+
+  const filteredWeaknesses = analysis.weaknesses?.filter((w: string) => {
+    const categoryKeywords = ['aim', 'positioning', 'utility', 'economy', 'timing', 'decision'];
+    const lowerW = w.toLowerCase();
+    for (const keyword of categoryKeywords) {
+      if (lowerW.includes(keyword) && !isCategoryEnabled(keyword)) {
+        return false;
+      }
+    }
+    return true;
+  }) || [];
+
+  // Filtrer le rapport de coaching
+  const coachingReport = rawCoachingReport ? {
+    ...rawCoachingReport,
+    priority: rawCoachingReport.priority?.filter((item: any) =>
+      isCategoryEnabled(item.area || item.category || '')
+    ),
+    priorityIssues: rawCoachingReport.priorityIssues?.filter((item: any) =>
+      isCategoryEnabled(item.area || item.category || '')
+    ),
+    recommendations: rawCoachingReport.recommendations?.filter((rec: any) => {
+      if (typeof rec === 'string') return true;
+      return isCategoryEnabled(rec.category || rec.area || '');
+    }),
+  } : null;
 
   return (
     <div className="space-y-6 pb-20 lg:pb-0">
@@ -209,16 +289,16 @@ export default async function AnalysisPage({ params }: AnalysisPageProps) {
         </CardContent>
       </Card>
 
-      {/* Points forts et faibles */}
+      {/* Points forts et faibles (filtrés selon features activées) */}
       <div className="grid md:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
             <CardTitle className="text-green-400">Points forts</CardTitle>
           </CardHeader>
           <CardContent>
-            {analysis.strengths && analysis.strengths.length > 0 ? (
+            {filteredStrengths.length > 0 ? (
               <ul className="space-y-2">
-                {analysis.strengths.map((strength, index) => (
+                {filteredStrengths.map((strength: string, index: number) => (
                   <li key={index} className="flex items-start gap-2">
                     <span className="text-green-400 mt-1">✓</span>
                     <span className="text-gray-300">{strength}</span>
@@ -236,9 +316,9 @@ export default async function AnalysisPage({ params }: AnalysisPageProps) {
             <CardTitle className="text-red-400">Points à améliorer</CardTitle>
           </CardHeader>
           <CardContent>
-            {analysis.weaknesses && analysis.weaknesses.length > 0 ? (
+            {filteredWeaknesses.length > 0 ? (
               <ul className="space-y-2">
-                {analysis.weaknesses.map((weakness, index) => (
+                {filteredWeaknesses.map((weakness: string, index: number) => (
                   <li key={index} className="flex items-start gap-2">
                     <span className="text-red-400 mt-1">!</span>
                     <span className="text-gray-300">{weakness}</span>

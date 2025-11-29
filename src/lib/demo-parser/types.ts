@@ -19,7 +19,7 @@ export interface DemoMetadata {
   map: string;
   duration: number;
   tickrate: number;
-  date: string | null;
+  matchDate?: string | null; // Date ISO du match si trouvée dans les convars
 }
 
 export interface PlayerInfo {

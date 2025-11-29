@@ -70,6 +70,10 @@ export default function UploadPage() {
     try {
       const formData = new FormData();
       formData.append('file', file);
+      // Envoyer la date de modification du fichier original
+      if (file.lastModified) {
+        formData.append('fileLastModified', file.lastModified.toString());
+      }
 
       // Simuler la progression pour l'UX
       const progressInterval = setInterval(() => {

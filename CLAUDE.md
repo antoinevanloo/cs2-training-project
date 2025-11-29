@@ -1,0 +1,1 @@
+respecte les bonnes pratique de développement, pense évolutivité et extensibilité. et chalenge toi toujours 

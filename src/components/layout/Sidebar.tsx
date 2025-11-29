@@ -2,6 +2,11 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { Shield } from 'lucide-react';
+
+interface SidebarProps {
+  isAdmin?: boolean;
+}
 
 const navigation = [
   {
@@ -67,9 +72,10 @@ function getActiveHref(pathname: string): string | undefined {
     .sort((a, b) => b.href.length - a.href.length)[0]?.href;
 }
 
-export function Sidebar() {
+export function Sidebar({ isAdmin = false }: SidebarProps) {
   const pathname = usePathname();
   const activeHref = getActiveHref(pathname);
+  const isAdminPage = pathname.startsWith('/dashboard/admin');
 
   return (
     <>
@@ -103,6 +109,24 @@ export function Sidebar() {
                 </Link>
               );
             })}
+
+            {/* Admin Link */}
+            {isAdmin && (
+              <>
+                <div className="my-4 border-t border-gray-800" />
+                <Link
+                  href="/dashboard/admin"
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                    isAdminPage
+                      ? 'bg-red-500/20 text-red-400'
+                      : 'text-red-400/70 hover:text-red-400 hover:bg-red-500/10'
+                  }`}
+                >
+                  <Shield className="w-5 h-5" />
+                  <span>Admin</span>
+                </Link>
+              </>
+            )}
           </nav>
 
           {/* Storage Info */}
