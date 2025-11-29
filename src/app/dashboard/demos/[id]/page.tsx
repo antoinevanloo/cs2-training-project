@@ -6,7 +6,8 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { CircularProgress } from '@/components/ui/Progress';
 import { DeleteDemoButton } from '@/components/demos/DeleteDemoButton';
-import { GraduationCap } from 'lucide-react';
+import { StrengthWeaknessCard } from '@/components/coaching';
+import { FileText } from 'lucide-react';
 
 export default async function DemoDetailPage({
   params,
@@ -55,17 +56,12 @@ export default async function DemoDetailPage({
         </div>
         <div className="flex gap-2">
           {demo.analysis && (
-            <>
-              <Link href={`/dashboard/demos/${demo.id}/coaching-report`}>
-                <Button className="gap-2">
-                  <GraduationCap className="w-4 h-4" />
-                  Coaching
-                </Button>
-              </Link>
-              <Link href={`/dashboard/demos/${demo.id}/analysis`}>
-                <Button variant="secondary">Voir l&apos;analyse</Button>
-              </Link>
-            </>
+            <Link href={`/dashboard/demos/${demo.id}/report`}>
+              <Button className="gap-2">
+                <FileText className="w-4 h-4" />
+                Voir le rapport
+              </Button>
+            </Link>
           )}
           <DeleteDemoButton
             demoId={demo.id}
@@ -200,23 +196,26 @@ export default async function DemoDetailPage({
               <p className="text-gray-400 mt-4 text-center">
                 Score global basé sur 6 catégories d&apos;analyse
               </p>
-              <div className="flex gap-2 mt-4">
-                <Link href={`/dashboard/demos/${demo.id}/coaching-report`}>
-                  <Button size="sm" className="gap-2">
-                    <GraduationCap className="w-4 h-4" />
-                    Coaching
-                  </Button>
-                </Link>
-                <Link href={`/dashboard/demos/${demo.id}/analysis`}>
-                  <Button variant="secondary" size="sm">
-                    Détails
-                  </Button>
-                </Link>
-              </div>
+              <Link href={`/dashboard/demos/${demo.id}/report`} className="mt-4 w-full">
+                <Button size="sm" className="gap-2 w-full">
+                  <FileText className="w-4 h-4" />
+                  Voir le rapport complet
+                </Button>
+              </Link>
             </CardContent>
           </Card>
         )}
       </div>
+
+      {/* Strengths & Weaknesses */}
+      {demo.analysis && (demo.analysis.strengths.length > 0 || demo.analysis.weaknesses.length > 0) && (
+        <StrengthWeaknessCard
+          strengths={demo.analysis.strengths || []}
+          weaknesses={demo.analysis.weaknesses || []}
+          compact={true}
+          maxItems={2}
+        />
+      )}
 
       {/* All Players */}
       <Card>
