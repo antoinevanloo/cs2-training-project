@@ -33,7 +33,7 @@ services:
       - NODE_ENV=production
       - PYTHON_PATH=python3
     volumes:
-      - demo_storage:/data
+      - ./data:/data
     depends_on:
       db:
         condition: service_healthy

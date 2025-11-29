@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { CircularProgress } from '@/components/ui/Progress';
+import { DeleteDemoButton } from '@/components/demos/DeleteDemoButton';
 
 export default async function DemoDetailPage({
   params,
@@ -57,6 +58,10 @@ export default async function DemoDetailPage({
               <Button>Voir l&apos;analyse</Button>
             </Link>
           )}
+          <DeleteDemoButton
+            demoId={demo.id}
+            demoName={`${demo.mapName} - ${demo.scoreTeam1}:${demo.scoreTeam2}`}
+          />
         </div>
       </div>
 
@@ -143,9 +148,29 @@ export default async function DemoDetailPage({
                 </div>
               </div>
             ) : (
-              <p className="text-gray-400 text-center py-8">
-                Statistiques non disponibles
-              </p>
+              <div className="text-center py-8">
+                <p className="text-gray-400 mb-2">
+                  Statistiques non disponibles
+                </p>
+                {isProcessing && (
+                  <p className="text-sm text-gray-500">
+                    Les statistiques seront disponibles une fois le traitement terminé.
+                  </p>
+                )}
+                {demo.status === 'FAILED' && (
+                  <p className="text-sm text-red-400">
+                    Le traitement a échoué. Vérifiez que votre Steam ID est correctement configuré dans les paramètres.
+                  </p>
+                )}
+                {demo.status === 'COMPLETED' && demo.playerStats.length === 0 && (
+                  <div className="text-sm text-yellow-400">
+                    <p>Aucune donnée de joueur trouvée.</p>
+                    <Link href="/dashboard/settings" className="underline hover:text-yellow-300">
+                      Vérifiez votre Steam ID dans les paramètres
+                    </Link>
+                  </div>
+                )}
+              </div>
             )}
           </CardContent>
         </Card>
@@ -185,62 +210,86 @@ export default async function DemoDetailPage({
           <CardTitle>Tous les joueurs</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="text-left text-gray-400 text-sm border-b border-gray-700">
-                  <th className="pb-3 font-medium">Joueur</th>
-                  <th className="pb-3 font-medium text-center">K</th>
-                  <th className="pb-3 font-medium text-center">D</th>
-                  <th className="pb-3 font-medium text-center">A</th>
-                  <th className="pb-3 font-medium text-center">ADR</th>
-                  <th className="pb-3 font-medium text-center">HS%</th>
-                  <th className="pb-3 font-medium text-center">Rating</th>
-                </tr>
-              </thead>
-              <tbody>
-                {demo.playerStats
-                  .sort((a, b) => b.rating - a.rating)
-                  .map((player) => (
-                    <tr
-                      key={player.id}
-                      className={`border-b border-gray-800 ${
-                        player.isMainPlayer ? 'bg-cs2-accent/10' : ''
-                      }`}
-                    >
-                      <td className="py-3">
-                        <div className="flex items-center gap-2">
-                          <span className="text-white">{player.playerName}</span>
-                          {player.isMainPlayer && (
-                            <span className="text-xs bg-cs2-accent/20 text-cs2-accent px-2 py-0.5 rounded">
-                              Vous
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-3 text-center text-white">
-                        {player.kills}
-                      </td>
-                      <td className="py-3 text-center text-white">
-                        {player.deaths}
-                      </td>
-                      <td className="py-3 text-center text-white">
-                        {player.assists}
-                      </td>
-                      <td className="py-3 text-center text-white">
-                        {Math.round(player.adr)}
-                      </td>
-                      <td className="py-3 text-center text-white">
-                        {Math.round(player.headshotPercentage)}%
-                      </td>
-                      <td className="py-3 text-center font-medium text-cs2-accent">
-                        {player.rating.toFixed(2)}
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
+          {demo.playerStats.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="text-left text-gray-400 text-sm border-b border-gray-700">
+                    <th className="pb-3 font-medium">Joueur</th>
+                    <th className="pb-3 font-medium text-center">K</th>
+                    <th className="pb-3 font-medium text-center">D</th>
+                    <th className="pb-3 font-medium text-center">A</th>
+                    <th className="pb-3 font-medium text-center">ADR</th>
+                    <th className="pb-3 font-medium text-center">HS%</th>
+                    <th className="pb-3 font-medium text-center">Rating</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {demo.playerStats
+                    .sort((a, b) => b.rating - a.rating)
+                    .map((player) => (
+                      <tr
+                        key={player.id}
+                        className={`border-b border-gray-800 ${
+                          player.isMainPlayer ? 'bg-cs2-accent/10' : ''
+                        }`}
+                      >
+                        <td className="py-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-white">{player.playerName}</span>
+                            {player.isMainPlayer && (
+                              <span className="text-xs bg-cs2-accent/20 text-cs2-accent px-2 py-0.5 rounded">
+                                Vous
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3 text-center text-white">
+                          {player.kills}
+                        </td>
+                        <td className="py-3 text-center text-white">
+                          {player.deaths}
+                        </td>
+                        <td className="py-3 text-center text-white">
+                          {player.assists}
+                        </td>
+                        <td className="py-3 text-center text-white">
+                          {Math.round(player.adr)}
+                        </td>
+                        <td className="py-3 text-center text-white">
+                          {Math.round(player.headshotPercentage)}%
+                        </td>
+                        <td className="py-3 text-center font-medium text-cs2-accent">
+                          {player.rating.toFixed(2)}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-gray-400 mb-2">Aucune donnée de joueur</p>
+              {isProcessing && (
+                <p className="text-sm text-gray-500">
+                  Les données des joueurs seront disponibles une fois le traitement terminé.
+                </p>
+              )}
+              {demo.status === 'FAILED' && (
+                <p className="text-sm text-red-400">
+                  Le traitement de la démo a échoué.
+                </p>
+              )}
+              {demo.status === 'COMPLETED' && (
+                <div className="text-sm text-yellow-400">
+                  <p>Les données n&apos;ont pas pu être extraites de cette démo.</p>
+                  <p className="text-gray-500 mt-1">
+                    Assurez-vous que le fichier .dem est valide et que votre Steam ID est configuré.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -24,21 +24,102 @@ const roles = [
   { value: 'igl', label: 'IGL' },
 ];
 
+interface UserSettings {
+  username: string;
+  steamId: string | null;
+  preferredRole: string | null;
+  preferredMaps: string[];
+  storageUsedMb: number;
+  maxStorageMb: number;
+}
+
 export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(false);
+  const [isFetching, setIsFetching] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const [username, setUsername] = useState('');
+  const [steamId, setSteamId] = useState('');
+  const [preferredRole, setPreferredRole] = useState('');
+  const [preferredMaps, setPreferredMaps] = useState<string[]>([]);
+  const [storageUsedMb, setStorageUsedMb] = useState(0);
+  const [maxStorageMb, setMaxStorageMb] = useState(500);
+
+  // Charger les données utilisateur
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const response = await fetch('/api/user/settings');
+        if (response.ok) {
+          const data: UserSettings = await response.json();
+          setUsername(data.username || '');
+          setSteamId(data.steamId || '');
+          setPreferredRole(data.preferredRole || '');
+          setPreferredMaps(data.preferredMaps || []);
+          setStorageUsedMb(data.storageUsedMb || 0);
+          setMaxStorageMb(data.maxStorageMb || 500);
+        }
+      } catch (error) {
+        console.error('Failed to fetch settings:', error);
+      } finally {
+        setIsFetching(false);
+      }
+    };
+
+    fetchSettings();
+  }, []);
+
+  const handleMapToggle = (mapValue: string) => {
+    setPreferredMaps((prev) =>
+      prev.includes(mapValue)
+        ? prev.filter((m) => m !== mapValue)
+        : [...prev, mapValue]
+    );
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setMessage(null);
 
-    // Simulate save
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    try {
+      const response = await fetch('/api/user/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username,
+          steamId: steamId || null,
+          preferredRole: preferredRole || null,
+          preferredMaps,
+        }),
+      });
 
-    setMessage({ type: 'success', text: 'Paramètres sauvegardés' });
-    setIsLoading(false);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Erreur lors de la sauvegarde');
+      }
+
+      setMessage({ type: 'success', text: 'Paramètres sauvegardés' });
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Erreur lors de la sauvegarde',
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
+
+  const storagePercentage = maxStorageMb > 0 ? (storageUsedMb / maxStorageMb) * 100 : 0;
+
+  if (isFetching) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cs2-accent"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 pb-20 lg:pb-0 max-w-2xl">
@@ -69,13 +150,44 @@ export default function SettingsPage() {
             <Input
               label="Nom d'utilisateur"
               placeholder="Votre nom"
-              defaultValue=""
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
             />
-            <Input
-              label="Steam ID (optionnel)"
-              placeholder="76561198000000000"
-              defaultValue=""
-            />
+            <div>
+              <Input
+                label="Steam ID"
+                placeholder="76561198000000000"
+                value={steamId}
+                onChange={(e) => setSteamId(e.target.value)}
+              />
+              <div className="mt-2 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                <p className="text-sm text-blue-300 font-medium mb-1">
+                  Comment trouver votre Steam ID ?
+                </p>
+                <ol className="text-xs text-blue-200/80 space-y-1 list-decimal list-inside">
+                  <li>Ouvrez Steam et allez sur votre profil</li>
+                  <li>Faites clic droit → &quot;Copier l&apos;URL de la page&quot;</li>
+                  <li>
+                    Allez sur{' '}
+                    <a
+                      href="https://steamid.io"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline hover:text-blue-300"
+                    >
+                      steamid.io
+                    </a>{' '}
+                    et collez l&apos;URL
+                  </li>
+                  <li>Copiez le &quot;steamID64&quot; (commence par 7656119...)</li>
+                </ol>
+              </div>
+              {!steamId && (
+                <p className="mt-2 text-xs text-amber-400">
+                  Le Steam ID est requis pour analyser vos demos. Configurez-le pour pouvoir uploader.
+                </p>
+              )}
+            </div>
           </CardContent>
         </Card>
 
@@ -87,6 +199,8 @@ export default function SettingsPage() {
           <CardContent className="space-y-4">
             <Select
               label="Rôle principal"
+              value={preferredRole}
+              onChange={(e) => setPreferredRole(e.target.value)}
               options={[{ value: '', label: 'Sélectionner...' }, ...roles]}
             />
             <div>
@@ -101,6 +215,8 @@ export default function SettingsPage() {
                   >
                     <input
                       type="checkbox"
+                      checked={preferredMaps.includes(map.value)}
+                      onChange={() => handleMapToggle(map.value)}
                       className="rounded bg-gray-700 border-gray-600 text-cs2-accent focus:ring-cs2-accent"
                     />
                     <span className="text-white">{map.label}</span>
@@ -120,12 +236,14 @@ export default function SettingsPage() {
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-400">Espace utilisé</span>
-                <span className="text-white">125 MB / 500 MB</span>
+                <span className="text-white">
+                  {storageUsedMb.toFixed(1)} MB / {maxStorageMb} MB
+                </span>
               </div>
               <div className="w-full bg-gray-700 rounded-full h-2">
                 <div
-                  className="bg-cs2-accent h-2 rounded-full"
-                  style={{ width: '25%' }}
+                  className="bg-cs2-accent h-2 rounded-full transition-all"
+                  style={{ width: `${Math.min(storagePercentage, 100)}%` }}
                 />
               </div>
               <p className="text-xs text-gray-500">
@@ -141,7 +259,7 @@ export default function SettingsPage() {
           <Button type="submit" isLoading={isLoading}>
             Sauvegarder
           </Button>
-          <Button type="button" variant="secondary">
+          <Button type="button" variant="secondary" onClick={() => window.history.back()}>
             Annuler
           </Button>
         </div>

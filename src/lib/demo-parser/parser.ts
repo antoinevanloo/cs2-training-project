@@ -84,16 +84,63 @@ function executePythonParser(
   });
 }
 
-export async function validateDemoFile(filePath: string): Promise<boolean> {
+export interface DemoValidationResult {
+  valid: boolean;
+  error?: string;
+  header?: string;
+  fileSize?: number;
+}
+
+export async function validateDemoFile(filePath: string): Promise<DemoValidationResult> {
   try {
+    // Vérifier que le fichier existe
+    try {
+      await fs.access(filePath);
+    } catch {
+      return {
+        valid: false,
+        error: `Fichier introuvable: ${filePath}`,
+      };
+    }
+
+    const stats = await fs.stat(filePath);
+    const fileSize = stats.size;
+
+    // Vérifier la taille minimale (un fichier .dem valide fait au moins quelques KB)
+    if (fileSize < 1024) {
+      return {
+        valid: false,
+        error: `Fichier trop petit (${fileSize} bytes). Le fichier est peut-être corrompu ou incomplet.`,
+        fileSize,
+      };
+    }
+
     const buffer = await fs.readFile(filePath);
 
     // Vérifier le magic number des fichiers .dem CS2
     // Les fichiers .dem commencent par "PBDEMS2" ou "HL2DEMO"
     const header = buffer.slice(0, 8).toString('utf-8');
 
-    return header.startsWith('PBDEMS2') || header.startsWith('HL2DEMO');
-  } catch {
-    return false;
+    if (header.startsWith('PBDEMS2')) {
+      return { valid: true, header: 'PBDEMS2 (CS2)', fileSize };
+    }
+
+    if (header.startsWith('HL2DEMO')) {
+      return { valid: true, header: 'HL2DEMO (CS:GO)', fileSize };
+    }
+
+    // Afficher les premiers bytes pour le debug
+    const hexHeader = buffer.slice(0, 16).toString('hex');
+    return {
+      valid: false,
+      error: `Format de fichier non reconnu. En-tête attendu: PBDEMS2 ou HL2DEMO, reçu: "${header.substring(0, 8)}" (hex: ${hexHeader})`,
+      header: header.substring(0, 8),
+      fileSize,
+    };
+  } catch (err) {
+    return {
+      valid: false,
+      error: `Erreur lors de la lecture du fichier: ${err instanceof Error ? err.message : 'Erreur inconnue'}`,
+    };
   }
 }

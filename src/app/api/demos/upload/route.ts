@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { requireAuthAPI } from '@/lib/auth/utils';
-import { saveDemoFile } from '@/lib/storage/local';
+import { saveDemoFile, deleteDemoFile } from '@/lib/storage/local';
 import { createDemo, getDemoByChecksum } from '@/lib/db/queries/demos';
-import { checkStorageLimit, updateUserStorageUsage } from '@/lib/db/queries/users';
+import { checkStorageLimit, updateUserStorageUsage, getUserById } from '@/lib/db/queries/users';
 import { getJobQueue, JOB_TYPES } from '@/lib/jobs/queue';
 import { storageConfig } from '@/lib/storage/config';
+import { validateDemoFile } from '@/lib/demo-parser/parser';
 
 export async function POST(request: Request) {
   try {
@@ -14,6 +15,19 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: 'Non authentifié' },
         { status: 401 }
+      );
+    }
+
+    // Vérifier que l'utilisateur a configuré son Steam ID
+    const fullUser = await getUserById(user.id);
+    if (!fullUser?.steamId) {
+      return NextResponse.json(
+        {
+          error: 'Steam ID requis',
+          message: 'Vous devez configurer votre Steam ID dans les paramètres avant de pouvoir uploader des demos.',
+          redirect: '/dashboard/settings',
+        },
+        { status: 400 }
       );
     }
 
@@ -58,11 +72,13 @@ export async function POST(request: Request) {
     const buffer = Buffer.from(await file.arrayBuffer());
 
     // Save file to storage
+    console.log('[Upload] Saving file for user:', user.id);
     const { filename, path: filePath, checksum, sizeMb } = await saveDemoFile(
       user.id,
       buffer,
       file.name
     );
+    console.log('[Upload] File saved to:', filePath);
 
     // Check for duplicate
     const existingDemo = await getDemoByChecksum(checksum);

@@ -1,7 +1,7 @@
 import path from 'path';
 
 export const storageConfig = {
-  basePath: process.env.STORAGE_PATH || path.join(process.cwd(), 'data'),
+  basePath: process.env.STORAGE_PATH || '/data',
   demosPath: 'demos',
   maxUploadSizeMb: parseInt(process.env.MAX_UPLOAD_SIZE_MB || '300', 10),
   maxStoragePerUserMb: parseInt(process.env.MAX_STORAGE_PER_USER_MB || '500', 10),

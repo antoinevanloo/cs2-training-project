@@ -20,19 +20,37 @@ def parse_demo(demo_path: str) -> dict:
 
     parser = DemoParser(demo_path)
 
+    # Extract rounds first to determine round numbers for other events
+    rounds = extract_rounds(parser)
+    round_ticks = [(r["tick"], r["roundNumber"]) for r in rounds]
+
     # Extraction des données
     result = {
         "metadata": extract_metadata(parser),
         "players": extract_players(parser),
-        "rounds": extract_rounds(parser),
-        "kills": extract_kills(parser),
-        "damages": extract_damages(parser),
-        "grenades": extract_grenades(parser),
+        "rounds": rounds,
+        "kills": extract_kills(parser, round_ticks),
+        "damages": extract_damages(parser, round_ticks),
+        "grenades": extract_grenades(parser, round_ticks),
         "positions": [],  # Désactivé par défaut pour réduire la taille
         "economy": extract_economy(parser),
     }
 
     return result
+
+
+def get_round_for_tick(tick: int, round_ticks: list) -> int:
+    """Determine which round a tick belongs to based on round_end ticks."""
+    if not round_ticks:
+        return 1
+
+    current_round = 1
+    for round_end_tick, round_num in round_ticks:
+        if tick <= round_end_tick:
+            return round_num
+        current_round = round_num + 1
+
+    return current_round
 
 
 def extract_metadata(parser: DemoParser) -> dict:
@@ -58,14 +76,15 @@ def extract_metadata(parser: DemoParser) -> dict:
 def extract_players(parser: DemoParser) -> list:
     """Extrait les informations des joueurs."""
     players = []
+    seen_steamids = set()
 
+    # Method 1: Try parse_ticks for player data (most reliable for CS2)
     try:
-        df = parser.parse_event("player_info")
+        df = parser.parse_ticks(["steamid", "name", "team_num"])
         if df is not None and len(df) > 0:
-            seen_steamids = set()
-            for _, row in df.iterrows():
+            for _, row in df.drop_duplicates(subset=["steamid"]).iterrows():
                 steamid = str(row.get("steamid", ""))
-                if steamid and steamid not in seen_steamids:
+                if steamid and steamid != "0" and steamid not in seen_steamids:
                     seen_steamids.add(steamid)
                     players.append({
                         "steamId": steamid,
@@ -75,10 +94,37 @@ def extract_players(parser: DemoParser) -> list:
     except Exception:
         pass
 
+    # Method 2: Fallback - extract from kills/deaths
+    if not players:
+        try:
+            df = parser.parse_event("player_death")
+            if df is not None and len(df) > 0:
+                # Get attackers
+                for _, row in df.iterrows():
+                    steamid = str(row.get("attacker_steamid", ""))
+                    if steamid and steamid != "0" and steamid not in seen_steamids:
+                        seen_steamids.add(steamid)
+                        players.append({
+                            "steamId": steamid,
+                            "name": str(row.get("attacker_name", "Unknown")),
+                            "team": 0,  # Unknown from kills
+                        })
+                    # Get victims
+                    steamid = str(row.get("user_steamid", ""))
+                    if steamid and steamid != "0" and steamid not in seen_steamids:
+                        seen_steamids.add(steamid)
+                        players.append({
+                            "steamId": steamid,
+                            "name": str(row.get("user_name", "Unknown")),
+                            "team": 0,
+                        })
+        except Exception:
+            pass
+
     return players
 
 
-def extract_kills(parser: DemoParser) -> list:
+def extract_kills(parser: DemoParser, round_ticks: list) -> list:
     """Extrait tous les kills."""
     kills = []
 
@@ -86,9 +132,13 @@ def extract_kills(parser: DemoParser) -> list:
         df = parser.parse_event("player_death")
         if df is not None and len(df) > 0:
             for _, row in df.iterrows():
+                tick = int(row.get("tick", 0))
+                # Calculate round from tick since player_death doesn't have round column
+                round_num = get_round_for_tick(tick, round_ticks)
+
                 kills.append({
-                    "tick": int(row.get("tick", 0)),
-                    "round": int(row.get("round", 0)) if "round" in row else 0,
+                    "tick": tick,
+                    "round": round_num,
                     "attackerSteamId": str(row.get("attacker_steamid", "")),
                     "attackerName": str(row.get("attacker_name", "")),
                     "victimSteamId": str(row.get("user_steamid", "")),
@@ -116,31 +166,59 @@ def extract_kills(parser: DemoParser) -> list:
     return kills
 
 
-def extract_damages(parser: DemoParser) -> list:
+def extract_damages(parser: DemoParser, round_ticks: list) -> list:
     """Extrait tous les dégâts infligés."""
     damages = []
+
+    # CS2 hitgroup string to int mapping
+    hitgroup_map = {
+        "generic": 0,
+        "head": 1,
+        "chest": 2,
+        "stomach": 3,
+        "leftarm": 4,
+        "rightarm": 5,
+        "leftleg": 6,
+        "rightleg": 7,
+        "neck": 1,  # Treat neck as head
+        "gear": 10,
+    }
 
     try:
         df = parser.parse_event("player_hurt")
         if df is not None and len(df) > 0:
             for _, row in df.iterrows():
-                damages.append({
-                    "tick": int(row.get("tick", 0)),
-                    "round": int(row.get("round", 0)) if "round" in row else 0,
-                    "attackerSteamId": str(row.get("attacker_steamid", "")),
-                    "victimSteamId": str(row.get("user_steamid", "")),
-                    "damage": int(row.get("dmg_health", 0) or 0),
-                    "damageArmor": int(row.get("dmg_armor", 0) or 0),
-                    "weapon": str(row.get("weapon", "")),
-                    "hitgroup": int(row.get("hitgroup", 0) or 0),
-                })
+                try:
+                    tick = int(row.get("tick", 0))
+                    round_num = get_round_for_tick(tick, round_ticks)
+
+                    # Handle hitgroup - can be string or int in CS2
+                    hitgroup = row.get("hitgroup", 0)
+                    if isinstance(hitgroup, str):
+                        hitgroup = hitgroup_map.get(hitgroup.lower(), 0)
+                    else:
+                        hitgroup = int(hitgroup) if hitgroup else 0
+
+                    damages.append({
+                        "tick": tick,
+                        "round": round_num,
+                        "attackerSteamId": str(row.get("attacker_steamid", "")),
+                        "victimSteamId": str(row.get("user_steamid", "")),
+                        "damage": int(row.get("dmg_health", 0) or 0),
+                        "damageArmor": int(row.get("dmg_armor", 0) or 0),
+                        "weapon": str(row.get("weapon", "")),
+                        "hitgroup": hitgroup,
+                    })
+                except Exception:
+                    # Skip individual rows that fail, continue with others
+                    continue
     except Exception:
         pass
 
     return damages
 
 
-def extract_grenades(parser: DemoParser) -> list:
+def extract_grenades(parser: DemoParser, round_ticks: list) -> list:
     """Extrait l'utilisation des grenades."""
     events = []
 
@@ -156,10 +234,13 @@ def extract_grenades(parser: DemoParser) -> list:
             df = parser.parse_event(event_name)
             if df is not None and len(df) > 0:
                 for _, row in df.iterrows():
+                    tick = int(row.get("tick", 0))
+                    round_num = get_round_for_tick(tick, round_ticks)
+
                     events.append({
                         "type": grenade_type,
-                        "tick": int(row.get("tick", 0)),
-                        "round": int(row.get("round", 0)) if "round" in row else 0,
+                        "tick": tick,
+                        "round": round_num,
                         "throwerSteamId": str(row.get("user_steamid", "") or row.get("entityid", "")),
                         "position": {
                             "x": float(row.get("x", 0) or 0),
@@ -177,14 +258,41 @@ def extract_rounds(parser: DemoParser) -> list:
     """Extrait les informations de chaque round."""
     rounds = []
 
+    # Map winner string to team number (CS2 uses "CT"/"T" strings)
+    winner_map = {"CT": 2, "ct": 2, "T": 3, "t": 3}
+
+    # Map reason string to reason code
+    reason_map = {
+        "t_killed": 9,      # T elimination
+        "ct_killed": 8,     # CT elimination
+        "bomb_exploded": 1, # Bomb exploded
+        "bomb_defused": 7,  # Bomb defused
+        "time_expired": 12, # Time ran out
+        "target_saved": 12, # Target saved (time)
+    }
+
     try:
         df = parser.parse_event("round_end")
         if df is not None and len(df) > 0:
             for _, row in df.iterrows():
+                # Handle winner - can be string ("CT"/"T") or int
+                winner = row.get("winner", 0)
+                if isinstance(winner, str):
+                    winner = winner_map.get(winner, 0)
+                else:
+                    winner = int(winner) if winner else 0
+
+                # Handle reason - can be string or int
+                reason = row.get("reason", 0)
+                if isinstance(reason, str):
+                    reason = reason_map.get(reason, 0)
+                else:
+                    reason = int(reason) if reason else 0
+
                 rounds.append({
                     "roundNumber": int(row.get("round", 0)) if "round" in row else len(rounds) + 1,
-                    "winner": int(row.get("winner", 0)),
-                    "reason": int(row.get("reason", 0)),
+                    "winner": winner,
+                    "reason": reason,
                     "tick": int(row.get("tick", 0)),
                 })
     except Exception:

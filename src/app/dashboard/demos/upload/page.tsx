@@ -97,7 +97,18 @@ export default function UploadPage() {
         router.push(`/dashboard/demos/${data.demo.id}`);
       }, 500);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur lors de l\'upload');
+      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de l\'upload';
+
+      // Si l'erreur contient une indication de redirection vers settings
+      if (errorMessage.includes('Steam ID')) {
+        setError('Vous devez configurer votre Steam ID avant de pouvoir uploader des demos.');
+        setTimeout(() => {
+          router.push('/dashboard/settings');
+        }, 2000);
+      } else {
+        setError(errorMessage);
+      }
+
       setIsUploading(false);
       setUploadProgress(0);
     }

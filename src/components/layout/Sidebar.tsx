@@ -61,8 +61,15 @@ const navigation = [
   },
 ];
 
+function getActiveHref(pathname: string): string | undefined {
+  return navigation
+    .filter((item) => pathname === item.href || pathname.startsWith(item.href + '/'))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
+}
+
 export function Sidebar() {
   const pathname = usePathname();
+  const activeHref = getActiveHref(pathname);
 
   return (
     <>
@@ -80,7 +87,7 @@ export function Sidebar() {
           {/* Navigation */}
           <nav className="flex-1 px-3 py-4 space-y-1">
             {navigation.map((item) => {
-              const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+              const isActive = item.href === activeHref;
               return (
                 <Link
                   key={item.name}
@@ -116,7 +123,7 @@ export function Sidebar() {
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-gray-900/95 backdrop-blur-sm border-t border-gray-800 z-50">
         <div className="flex justify-around py-2">
           {navigation.slice(0, 5).map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+            const isActive = item.href === activeHref;
             return (
               <Link
                 key={item.name}
