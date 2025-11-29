@@ -1,0 +1,70 @@
+FROM node:20-slim AS base
+
+# Install Python for demo parser and OpenSSL for Prisma
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    python3-venv \
+    openssl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install dependencies only when needed
+FROM base AS deps
+WORKDIR /app
+
+# Copy package files AND prisma schema (needed for postinstall)
+COPY package.json package-lock.json* ./
+COPY prisma ./prisma/
+
+# Install dependencies (postinstall will run prisma generate)
+RUN npm ci
+
+# Install Python dependencies
+COPY scripts/demo-parser/requirements.txt ./scripts/demo-parser/
+RUN pip3 install --break-system-packages -r scripts/demo-parser/requirements.txt
+
+# Rebuild the source code only when needed
+FROM base AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+# Generate Prisma client (in case postinstall didn't work)
+RUN npx prisma generate
+
+# Build Next.js
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN npm run build
+
+# Production image
+FROM base AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+RUN groupadd --system --gid 1001 nodejs
+RUN useradd --system --uid 1001 nextjs
+
+# Copy Python dependencies
+COPY --from=deps /usr/local/lib/python3.11/dist-packages /usr/local/lib/python3.11/dist-packages
+
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+
+# Create data directory
+RUN mkdir -p /data && chown nextjs:nodejs /data
+
+USER nextjs
+
+EXPOSE 3000
+
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
+CMD ["node", "server.js"]
