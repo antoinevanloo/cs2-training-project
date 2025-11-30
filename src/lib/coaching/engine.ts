@@ -41,10 +41,44 @@ export interface CoachingOptions {
 }
 
 /**
- * Résultat détaillé d'une règle évaluée
+ * Résultat détaillé d'une règle évaluée (interne, avec fonction condition)
  */
 export interface EvaluatedRule {
   rule: CoachingRule;
+  triggered: boolean;
+  disabled: boolean;
+  disabledReason?: string;
+  adjustments?: {
+    originalThreshold?: number;
+    adjustedThreshold?: number;
+    modifiers?: {
+      role?: number;
+      map?: number;
+      rank?: number;
+    };
+  };
+}
+
+/**
+ * Version sérialisable d'une règle (sans fonction condition)
+ */
+export interface SerializedRule {
+  id: string;
+  category: string;
+  priority: number;
+  recommendation: {
+    title: string;
+    description: string;
+    exercises: Exercise[];
+    workshopMaps: string[];
+  };
+}
+
+/**
+ * Résultat sérialisable d'une règle évaluée (pour stockage DB)
+ */
+export interface SerializedEvaluatedRule {
+  rule: SerializedRule;
   triggered: boolean;
   disabled: boolean;
   disabledReason?: string;
@@ -75,7 +109,7 @@ export interface ExtendedCoachingReport extends CoachingReport {
     triggered: number;
     disabled: number;
     total: number;
-    details: EvaluatedRule[];
+    details: SerializedEvaluatedRule[];
   };
   featuresStatus: {
     coachingEnabled: boolean;
@@ -163,7 +197,17 @@ export class CoachingEngine {
         triggered: evaluatedRules.filter((er) => er.triggered && !er.disabled).length,
         disabled: evaluatedRules.filter((er) => er.disabled).length,
         total: evaluatedRules.length,
-        details: evaluatedRules,
+        // Sérialiser les règles sans les fonctions (condition non-sérialisable)
+        details: evaluatedRules.map((er) => ({
+          ...er,
+          rule: {
+            id: er.rule.id,
+            category: er.rule.category,
+            priority: er.rule.priority,
+            recommendation: er.rule.recommendation,
+            // Omit 'condition' function - not serializable
+          },
+        })),
       },
       featuresStatus: {
         coachingEnabled: isGlobalFeatureEnabled('coachingEnabled'),

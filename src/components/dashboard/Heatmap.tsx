@@ -139,7 +139,7 @@ export function Heatmap({
   const mapConfig = MAP_CONFIGS[mapName] || MAP_CONFIGS.de_dust2;
 
   // Normaliser les coordonnées du jeu vers 0-1
-  const normalizePosition = (x: number, y: number) => {
+  const normalizePosition = useCallback((x: number, y: number) => {
     const { bounds } = mapConfig;
     // Si les coordonnées sont déjà normalisées (0-1), les garder
     if (x >= 0 && x <= 1 && y >= 0 && y <= 1) {
@@ -152,7 +152,7 @@ export function Heatmap({
       x: Math.max(0, Math.min(1, normalizedX)),
       y: Math.max(0, Math.min(1, normalizedY)),
     };
-  };
+  }, [mapConfig]);
 
   // Normaliser toutes les positions
   const normalizedPositions = useMemo(() => {
@@ -160,7 +160,7 @@ export function Heatmap({
       ...p,
       ...normalizePosition(p.x, p.y),
     }));
-  }, [positions, mapConfig]);
+  }, [positions, normalizePosition]);
 
   // Filtrer les positions par type
   const filteredPositions = useMemo(() => {
@@ -331,11 +331,11 @@ export function Heatmap({
         className="relative overflow-hidden"
         style={{ height }}
       >
-        {/* Map background (placeholder - en prod ce serait une vraie image de map) */}
+        {/* Map background SVG */}
         <div
-          className="absolute inset-0 bg-gradient-to-br from-gray-800 to-gray-900"
+          className="absolute inset-0"
           style={{
-            backgroundImage: `url('/maps/${mapName}_radar.png')`,
+            backgroundImage: `url('/maps/${mapName}_radar.svg')`,
             backgroundSize: 'contain',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
@@ -519,13 +519,34 @@ interface MiniHeatmapProps {
 }
 
 export function MiniHeatmap({ positions, mapName, size = 120, className = '' }: MiniHeatmapProps) {
+  const mapConfig = MAP_CONFIGS[mapName] || MAP_CONFIGS.de_dust2;
+
+  // Normaliser les positions
+  const normalizedPositions = useMemo(() => {
+    return positions.map(p => {
+      const { bounds } = mapConfig;
+      // Si déjà normalisé
+      if (p.x >= 0 && p.x <= 1 && p.y >= 0 && p.y <= 1) {
+        return p;
+      }
+      // Normaliser
+      const normalizedX = (p.x - bounds.minX) / (bounds.maxX - bounds.minX);
+      const normalizedY = 1 - (p.y - bounds.minY) / (bounds.maxY - bounds.minY);
+      return {
+        ...p,
+        x: Math.max(0, Math.min(1, normalizedX)),
+        y: Math.max(0, Math.min(1, normalizedY)),
+      };
+    });
+  }, [positions, mapConfig]);
+
   return (
     <div
       className={`relative rounded-lg overflow-hidden bg-gray-800/50 ${className}`}
       style={{ width: size, height: size }}
     >
       <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full">
-        {positions.slice(0, 50).map((pos, i) => (
+        {normalizedPositions.slice(0, 50).map((pos, i) => (
           <circle
             key={i}
             cx={pos.x * 100}
