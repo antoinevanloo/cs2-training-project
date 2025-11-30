@@ -18,6 +18,10 @@ import {
   Check,
   X,
   Info,
+  RefreshCw,
+  RotateCcw,
+  UserX,
+  Trash2,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -241,6 +245,96 @@ export default function AdminFeaturesPage() {
     setMessage(null);
   };
 
+  // Invalidate server cache
+  const handleInvalidateCache = async () => {
+    try {
+      const response = await fetch('/api/admin/features?action=invalidate-cache', {
+        method: 'DELETE',
+      });
+      if (response.ok) {
+        setMessage({ type: 'success', text: 'Cache serveur invalidé' });
+      } else {
+        throw new Error('Erreur');
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Erreur lors de l\'invalidation du cache' });
+    }
+  };
+
+  // Reset all config to defaults
+  const handleResetAll = async () => {
+    if (!confirm('Êtes-vous sûr de vouloir réinitialiser toute la configuration ? Toutes les features reviendront à leurs valeurs par défaut.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/admin/features?action=reset-all', {
+        method: 'DELETE',
+      });
+      if (response.ok) {
+        setSavedConfig({});
+        setOverrides({});
+        setHasChanges(false);
+        setMessage({ type: 'success', text: 'Configuration réinitialisée aux valeurs par défaut' });
+      } else {
+        throw new Error('Erreur');
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Erreur lors de la réinitialisation' });
+    }
+  };
+
+  // Debug - show current state
+  const [debugData, setDebugData] = useState<Record<string, unknown> | null>(null);
+  const handleDebug = async () => {
+    try {
+      const response = await fetch('/api/admin/features/debug');
+      const data = await response.json();
+      setDebugData(data.debug);
+      console.log('Debug data:', data.debug);
+    } catch (error) {
+      console.error('Debug error:', error);
+    }
+  };
+
+  // Clear user preferences
+  const handleClearMyPreferences = async () => {
+    try {
+      const response = await fetch('/api/admin/features?action=clear-my-preferences', {
+        method: 'DELETE',
+      });
+      if (response.ok) {
+        setMessage({ type: 'success', text: 'Vos préférences ont été réinitialisées. Rafraîchissez la page de démo.' });
+        // Refresh debug data
+        handleDebug();
+      } else {
+        throw new Error('Erreur');
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Erreur lors de la suppression des préférences' });
+    }
+  };
+
+  // Clear ALL users preferences
+  const handleClearAllPreferences = async () => {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer les préférences de TOUS les utilisateurs ?')) {
+      return;
+    }
+    try {
+      const response = await fetch('/api/admin/features?action=clear-all-preferences', {
+        method: 'DELETE',
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setMessage({ type: 'success', text: data.message });
+      } else {
+        throw new Error('Erreur');
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Erreur lors de la suppression des préférences' });
+    }
+  };
+
   // Count features by status
   const statusCounts = Object.values(FEATURE_DEFINITIONS).reduce(
     (acc, f) => {
@@ -267,9 +361,26 @@ export default function AdminFeaturesPage() {
           <h1 className="text-3xl font-bold text-white">Gestion des Features</h1>
           <p className="text-gray-400 mt-1">
             {Object.keys(FEATURE_DEFINITIONS).length} features configurables
+            {Object.keys(savedConfig).length > 0 && (
+              <span className="ml-2 text-yellow-400">
+                ({Object.keys(savedConfig).length} override{Object.keys(savedConfig).length > 1 ? 's' : ''} actif{Object.keys(savedConfig).length > 1 ? 's' : ''})
+              </span>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <Button variant="secondary" onClick={handleDebug} title="Afficher l'état de debug">
+            <Info className="w-4 h-4 mr-2" />
+            Debug
+          </Button>
+          <Button variant="secondary" onClick={handleInvalidateCache} title="Invalider le cache serveur">
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Cache
+          </Button>
+          <Button variant="secondary" onClick={handleResetAll} title="Réinitialiser tout aux valeurs par défaut">
+            <RotateCcw className="w-4 h-4 mr-2" />
+            Reset
+          </Button>
           {hasChanges && (
             <Button variant="secondary" onClick={handleReset}>
               Annuler
@@ -292,6 +403,71 @@ export default function AdminFeaturesPage() {
         >
           {message.text}
         </div>
+      )}
+
+      {/* Debug Panel */}
+      {debugData && (
+        <Card className="bg-gray-900 border-yellow-500/50">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-yellow-400">Debug Info</CardTitle>
+            <button onClick={() => setDebugData(null)} className="text-gray-400 hover:text-white">
+              <X className="w-5 h-5" />
+            </button>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4 text-sm font-mono">
+              {/* User Context */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-yellow-400 font-bold">User Context:</h4>
+                  <Button
+                    variant="secondary"
+                    onClick={handleClearMyPreferences}
+                    className="!py-1 !px-3 text-xs bg-red-500/20 hover:bg-red-500/30 text-red-400"
+                  >
+                    <UserX className="w-3 h-3 mr-1" />
+                    Supprimer mes préférences
+                  </Button>
+                </div>
+                <pre className="bg-gray-800 p-3 rounded overflow-auto max-h-40 text-gray-300">
+                  {JSON.stringify(debugData.userContext, null, 2)}
+                </pre>
+              </div>
+
+              {/* Raw DB Config */}
+              <div>
+                <h4 className="text-yellow-400 font-bold mb-2">Raw DB Config (SystemConfig):</h4>
+                <pre className="bg-gray-800 p-3 rounded overflow-auto max-h-40 text-gray-300">
+                  {JSON.stringify(debugData.rawDbConfig, null, 2)}
+                </pre>
+              </div>
+
+              {/* Enabled Analyzers */}
+              <div>
+                <h4 className="text-yellow-400 font-bold mb-2">Enabled Analyzers (calculated):</h4>
+                <pre className="bg-gray-800 p-3 rounded overflow-auto max-h-40 text-gray-300">
+                  {JSON.stringify(debugData.enabledAnalyzers, null, 2)}
+                </pre>
+              </div>
+
+              {/* Analysis Features */}
+              <div>
+                <h4 className="text-yellow-400 font-bold mb-2">Analysis Features Status:</h4>
+                <pre className="bg-gray-800 p-3 rounded overflow-auto max-h-60 text-gray-300">
+                  {JSON.stringify(debugData.analysisFeatures, null, 2)}
+                </pre>
+              </div>
+
+              {/* Sample Analysis */}
+              <div>
+                <h4 className="text-yellow-400 font-bold mb-2">Sample Analysis (DB scores):</h4>
+                <pre className="bg-gray-800 p-3 rounded overflow-auto max-h-40 text-gray-300">
+                  {JSON.stringify(debugData.sampleAnalysis, null, 2)}
+                </pre>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Stats Cards */}

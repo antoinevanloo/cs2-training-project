@@ -294,15 +294,35 @@ src/components/dashboard/
 
 ---
 
+## Règles UI/UX Obligatoires
+
+### Icônes
+- **TOUJOURS** utiliser les icônes Lucide React (`lucide-react`) pour l'interface
+- **JAMAIS** d'emojis classiques (🔄, ⚠️, etc.) dans les boutons ou l'UI
+- Les emojis sont acceptés uniquement dans le contenu textuel utilisateur (ex: descriptions, commentaires)
+- Importer les icônes depuis `lucide-react` et les utiliser comme composants React
+
+```tsx
+// ✅ CORRECT
+import { RefreshCw, AlertTriangle } from 'lucide-react';
+<Button><RefreshCw className="w-4 h-4 mr-2" />Cache</Button>
+
+// ❌ INCORRECT
+<Button>🔄 Cache</Button>
+```
+
+---
+
 ## Contexte Obligatoire pour IA
 
 ```
 Tu travailles sur CS2 Coach, une plateforme de coaching CS2 automatisée.
-Tu appliques les bonnes pratiques de développement suivantes : mxtention, modularité, clean code et réutilisabilité 
+Tu appliques les bonnes pratiques de développement suivantes : mxtention, modularité, clean code et réutilisabilité
 
 LECTURE OBLIGATOIRE :
 - Lis CLAUDE.md pour les règles de développement
 - Lis README.md pour le contexte projet
+- Lis INSTRUCTIONS.md pour les règles UI/UX
 
 STACK : Next.js 14 (App Router), TypeScript strict, Tailwind, PostgreSQL, Prisma, NextAuth v5, pg-boss, demoparser2 (Python)
 

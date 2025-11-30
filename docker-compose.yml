@@ -12,7 +12,7 @@ services:
       - STORAGE_PATH=/data
       - NODE_ENV=production
     volumes:
-      - demo_storage:/data
+      - ./data:/data
     depends_on:
       db:
         condition: service_healthy

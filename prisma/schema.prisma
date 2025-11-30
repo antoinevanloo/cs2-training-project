@@ -60,6 +60,8 @@ model User {
   stats              UserStats?
   featurePreferences UserFeaturePreferences?
   featureOverrides   UserFeatureOverride[]
+  preferences        UserPreferences?
+  goals              UserGoal[]
 
   // Relations équipe (préparé pour le futur)
   teamMemberships TeamMember[]
@@ -229,6 +231,11 @@ model DemoPlayerStats {
   enemiesFlashed Int     @default(0)
   utilityDamage Int      @default(0)
 
+  // Nouvelles stats v2
+  tradesGiven     Int    @default(0)   // Nombre de trades effectués
+  tradesReceived  Int    @default(0)   // Nombre de fois tradé
+  avgBlindDuration Float? // Durée moyenne aveuglement causé
+
   createdAt     DateTime @default(now())
 
   @@unique([demoId, steamId])
@@ -272,6 +279,9 @@ model Analysis {
   demoId        String   @unique
   demo          Demo     @relation(fields: [demoId], references: [id], onDelete: Cascade)
 
+  // Version de l'analyse (v1 ou v2)
+  version       String   @default("1.0")
+
   // Scores globaux (0-100)
   overallScore  Float
   aimScore      Float
@@ -280,6 +290,11 @@ model Analysis {
   economyScore  Float
   timingScore   Float
   decisionScore Float
+
+  // Nouveaux scores v2 (0-100)
+  movementScore   Float?   // Counter-strafing, crouch, scope discipline
+  awarenessScore  Float?   // Bomb awareness, flash dodge, info gathering
+  teamplayScore   Float?   // Trading, support, coordination
 
   // Analyse aim détaillée (JSONB)
   aimAnalysis   Json
@@ -335,9 +350,17 @@ model Analysis {
   //   riskTaking: { calculated: 8, reckless: 2 }
   // }
 
+  // Nouvelles analyses v2 (JSONB)
+  movementAnalysis  Json?    // Counter-strafing, crouch, scope, jump, walk discipline
+  awarenessAnalysis Json?    // Bomb awareness, flash awareness, info gathering
+  teamplayAnalysis  Json?    // Trading, support, coordination, entry, clutch
+
   // Forces et faiblesses identifiées
   strengths     String[]
   weaknesses    String[]
+
+  // Recommandations v2
+  recommendations Json?      // Array of prioritized recommendations
 
   // Comparaison avec moyennes (par rank si disponible)
   comparisonData Json?
@@ -560,6 +583,11 @@ model ProgressSnapshot {
   economyScore  Float
   timingScore   Float
   decisionScore Float
+
+  // Nouveaux scores v2
+  movementScore   Float?
+  awarenessScore  Float?
+  teamplayScore   Float?
 
   // Contexte
   rank          CS2Rank?

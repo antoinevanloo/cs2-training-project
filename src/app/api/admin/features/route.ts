@@ -310,6 +310,24 @@ export async function DELETE(request: NextRequest) {
       });
     }
 
+    // Handle clear user preferences (for current admin user)
+    if (action === 'clear-my-preferences') {
+      await prisma.userFeaturePreferences.deleteMany({
+        where: { userId: admin.id },
+      });
+      return NextResponse.json({
+        message: 'Préférences utilisateur supprimées',
+      });
+    }
+
+    // Handle clear ALL users preferences
+    if (action === 'clear-all-preferences') {
+      const result = await prisma.userFeaturePreferences.deleteMany({});
+      return NextResponse.json({
+        message: `${result.count} préférences utilisateur supprimées`,
+      });
+    }
+
     // Handle user override deletion
     const userId = searchParams.get('userId');
     const featureId = searchParams.get('featureId');
