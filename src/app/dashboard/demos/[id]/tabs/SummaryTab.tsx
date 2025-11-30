@@ -5,6 +5,7 @@ import { CircularProgress } from '@/components/ui/Progress';
 import { Button } from '@/components/ui/Button';
 import { StrengthWeaknessCard } from '@/components/coaching';
 import { CategoryRadarChart } from '@/components/charts';
+import { MetricDisplay } from '@/components/ui/MetricDisplay';
 import { Lightbulb, Calendar, Trophy, Skull, Minus } from 'lucide-react';
 
 interface PlayerStats {
@@ -18,12 +19,19 @@ interface PlayerStats {
 }
 
 interface CategoryScores {
-  aim: number;
-  positioning: number;
-  utility: number;
-  economy: number;
-  timing: number;
-  decision: number;
+  aim?: number;
+  positioning?: number;
+  utility?: number;
+  economy?: number;
+  timing?: number;
+  decision?: number;
+}
+
+interface Comparison {
+    rating: number;
+    adr: number;
+    hsPercent: number;
+    kast: number;
 }
 
 interface SummaryTabProps {
@@ -35,6 +43,7 @@ interface SummaryTabProps {
   matchResult: 'WIN' | 'LOSS' | 'TIE';
   onViewCoaching: () => void;
   onViewPlan: () => void;
+  comparison: Comparison | null;
 }
 
 export function SummaryTab({
@@ -46,6 +55,7 @@ export function SummaryTab({
   matchResult,
   onViewCoaching,
   onViewPlan,
+  comparison,
 }: SummaryTabProps) {
   const resultConfig = {
     WIN: { icon: Trophy, color: 'text-green-400', bg: 'bg-green-500/10', label: 'Victoire' },
@@ -56,7 +66,6 @@ export function SummaryTab({
   const result = resultConfig[matchResult];
   const ResultIcon = result.icon;
 
-  // Générer un conseil prioritaire basé sur la faiblesse principale
   const priorityAdvice = weaknesses.length > 0
     ? `Focus sur: ${weaknesses[0]}`
     : 'Continue comme ça, tu progresses bien !';
@@ -65,7 +74,6 @@ export function SummaryTab({
     <div className="space-y-6">
       {/* Score global + Résultat + Radar */}
       <div className="grid lg:grid-cols-3 gap-6">
-        {/* Score global */}
         <Card className="bg-gray-800/50 border-gray-700/50">
           <CardContent className="p-6 flex flex-col items-center">
             <div className={`flex items-center gap-2 mb-4 px-3 py-1 rounded-full ${result.bg}`}>
@@ -84,7 +92,6 @@ export function SummaryTab({
           </CardContent>
         </Card>
 
-        {/* Radar Chart */}
         <Card className="bg-gray-800/50 border-gray-700/50 lg:col-span-2">
           <CardContent className="p-6">
             <h3 className="text-white font-semibold mb-4">Répartition des compétences</h3>
@@ -102,16 +109,45 @@ export function SummaryTab({
 
       {/* Stats clés du match */}
       {playerStats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-          <StatMini label="K/D/A" value={`${playerStats.kills}/${playerStats.deaths}/${playerStats.assists}`} />
-          <StatMini label="Rating" value={playerStats.rating.toFixed(2)} highlight />
-          <StatMini label="ADR" value={Math.round(playerStats.adr).toString()} />
-          <StatMini label="HS%" value={`${Math.round(playerStats.headshotPercentage)}%`} />
-          <StatMini label="KAST" value={`${Math.round(playerStats.kast)}%`} />
-          <StatMini
-            label="K/D"
-            value={(playerStats.kills / Math.max(1, playerStats.deaths)).toFixed(2)}
-          />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card className="p-4 border-gray-800/50 bg-gradient-to-br from-gray-900/50 to-gray-800/30">
+              <MetricDisplay
+                metricId="rating"
+                value={playerStats.rating}
+                granularity="demo"
+                previousValue={comparison ? playerStats.rating - comparison.rating : undefined}
+                showTrend={!!comparison}
+                size="md"
+              />
+            </Card>
+            <Card className="p-4 border-gray-800/50 bg-gradient-to-br from-gray-900/50 to-gray-800/30">
+              <MetricDisplay
+                metricId="adr"
+                value={playerStats.adr}
+                granularity="demo"
+                previousValue={comparison ? playerStats.adr - comparison.adr : undefined}
+                showTrend={!!comparison}
+                size="md"
+              />
+            </Card>
+            <Card className="p-4 border-gray-800/50 bg-gradient-to-br from-gray-900/50 to-gray-800/30">
+              <div className="flex flex-col gap-1">
+                <span className="text-sm text-gray-400">K/D/A</span>
+                <span className="text-2xl font-bold text-white">
+                  {playerStats.kills}/{playerStats.deaths}/{playerStats.assists}
+                </span>
+              </div>
+            </Card>
+            <Card className="p-4 border-gray-800/50 bg-gradient-to-br from-gray-900/50 to-gray-800/30">
+              <MetricDisplay
+                metricId="headshotPercentage"
+                value={playerStats.headshotPercentage}
+                granularity="demo"
+                previousValue={comparison ? playerStats.headshotPercentage - comparison.hsPercent : undefined}
+                showTrend={!!comparison}
+                size="md"
+              />
+            </Card>
         </div>
       )}
 
@@ -130,7 +166,6 @@ export function SummaryTab({
         </CardContent>
       </Card>
 
-      {/* Forces et Faiblesses */}
       <StrengthWeaknessCard
         strengths={strengths}
         weaknesses={weaknesses}
@@ -138,7 +173,6 @@ export function SummaryTab({
         onViewMore={onViewCoaching}
       />
 
-      {/* CTAs */}
       <div className="flex flex-col sm:flex-row gap-3">
         <Button
           onClick={onViewCoaching}

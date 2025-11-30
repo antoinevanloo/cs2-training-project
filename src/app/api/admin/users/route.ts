@@ -139,7 +139,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (updates.subscriptionTier !== undefined) {
-      if (!['FREE', 'PRO', 'PRO_PLUS', 'TEAM', 'ENTERPRISE'].includes(updates.subscriptionTier)) {
+      if (!['FREE', 'STARTER', 'PRO', 'TEAM', 'ENTERPRISE'].includes(updates.subscriptionTier)) {
         return NextResponse.json(
           { error: 'subscriptionTier invalide' },
           { status: 400 }

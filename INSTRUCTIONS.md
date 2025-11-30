@@ -298,6 +298,7 @@ src/components/dashboard/
 
 ```
 Tu travailles sur CS2 Coach, une plateforme de coaching CS2 automatisée.
+Tu appliques les bonnes pratiques de développement suivantes : mxtention, modularité, clean code et réutilisabilité 
 
 LECTURE OBLIGATOIRE :
 - Lis CLAUDE.md pour les règles de développement

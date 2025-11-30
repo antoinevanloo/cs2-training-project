@@ -18,23 +18,23 @@ interface PlayerStats {
 }
 
 interface CategoryScores {
-  aim: number;
-  positioning: number;
-  utility: number;
-  economy: number;
-  timing: number;
-  decision: number;
+  aim?: number;
+  positioning?: number;
+  utility?: number;
+  economy?: number;
+  timing?: number;
+  decision?: number;
 }
 
 interface MetricsTabProps {
   categoryScores: CategoryScores;
   analyses: {
-    aim: unknown;
-    positioning: unknown;
-    utility: unknown;
-    economy: unknown;
-    timing: unknown;
-    decision: unknown;
+    aim: unknown | null;
+    positioning: unknown | null;
+    utility: unknown | null;
+    economy: unknown | null;
+    timing: unknown | null;
+    decision: unknown | null;
   };
   playerStats: PlayerStats | null;
 }
@@ -148,6 +148,11 @@ export function MetricsTab({ categoryScores, analyses, playerStats }: MetricsTab
           const score = categoryScores[key as keyof CategoryScores];
           const analysis = analyses[key as keyof typeof analyses];
           const isExpanded = expandedCategory === key;
+
+          // Skip disabled/unavailable analyzers
+          if (score === undefined || score === null) {
+            return null;
+          }
 
           return (
             <Card

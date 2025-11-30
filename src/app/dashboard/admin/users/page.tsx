@@ -18,6 +18,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { TIER_FILTER_OPTIONS, TIER_SELECT_OPTIONS, TIER_BG_COLORS } from '@/lib/constants/tiers';
 
 interface User {
   id: string;
@@ -46,14 +47,7 @@ interface Pagination {
   totalPages: number;
 }
 
-const tierOptions = [
-  { value: '', label: 'Tous les tiers' },
-  { value: 'FREE', label: 'Free' },
-  { value: 'PRO', label: 'Pro' },
-  { value: 'PRO_PLUS', label: 'Pro+' },
-  { value: 'TEAM', label: 'Team' },
-  { value: 'ENTERPRISE', label: 'Enterprise' },
-];
+const tierOptions = TIER_FILTER_OPTIONS;
 
 const roleOptions = [
   { value: '', label: 'Tous les rôles' },
@@ -61,13 +55,7 @@ const roleOptions = [
   { value: 'ADMIN', label: 'Admin' },
 ];
 
-const tierColors: Record<string, string> = {
-  FREE: 'bg-gray-600',
-  PRO: 'bg-blue-600',
-  PRO_PLUS: 'bg-purple-600',
-  TEAM: 'bg-green-600',
-  ENTERPRISE: 'bg-yellow-600',
-};
+const tierColors = TIER_BG_COLORS;
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -402,13 +390,7 @@ export default function AdminUsersPage() {
                 label="Tier d'abonnement"
                 value={editForm.subscriptionTier}
                 onChange={(e) => setEditForm({ ...editForm, subscriptionTier: e.target.value })}
-                options={[
-                  { value: 'FREE', label: 'Free' },
-                  { value: 'PRO', label: 'Pro' },
-                  { value: 'PRO_PLUS', label: 'Pro+' },
-                  { value: 'TEAM', label: 'Team' },
-                  { value: 'ENTERPRISE', label: 'Enterprise' },
-                ]}
+                options={TIER_SELECT_OPTIONS}
               />
 
               <Input

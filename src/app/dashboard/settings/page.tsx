@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
+import { TIER_COLORS } from '@/lib/constants/tiers';
 
 const maps = [
   { value: 'de_dust2', label: 'Dust II' },
@@ -275,11 +276,9 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between">
             <CardTitle>Abonnement</CardTitle>
             <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-              effectiveTier === 'FREE' ? 'bg-gray-600 text-gray-200' :
-              effectiveTier === 'PRO' ? 'bg-blue-600 text-white' :
-              effectiveTier === 'PRO_PLUS' ? 'bg-purple-600 text-white' :
-              effectiveTier === 'TEAM' ? 'bg-green-600 text-white' :
-              'bg-yellow-600 text-black'
+              TIER_COLORS[effectiveTier]?.bg || 'bg-gray-600'
+            } ${
+              TIER_COLORS[effectiveTier]?.text || 'text-white'
             }`}>
               {tierName}
               {isAdmin && ' (Admin)'}
@@ -335,17 +334,17 @@ export default function SettingsPage() {
                     <span className="px-2 py-1 bg-gray-700 rounded text-xs text-gray-300">Stats de base</span>
                     <span className="px-2 py-1 bg-gray-700 rounded text-xs text-gray-300">Conseils basiques</span>
                   </>
-                ) : effectiveTier === 'PRO' ? (
+                ) : effectiveTier === 'STARTER' ? (
                   <>
                     <span className="px-2 py-1 bg-blue-900/50 rounded text-xs text-blue-300">Analyse complète</span>
                     <span className="px-2 py-1 bg-blue-900/50 rounded text-xs text-blue-300">Coaching avancé</span>
-                    <span className="px-2 py-1 bg-blue-900/50 rounded text-xs text-blue-300">Export PDF</span>
                     <span className="px-2 py-1 bg-blue-900/50 rounded text-xs text-blue-300">Suivi progression</span>
                   </>
-                ) : effectiveTier === 'PRO_PLUS' ? (
+                ) : effectiveTier === 'PRO' ? (
                   <>
-                    <span className="px-2 py-1 bg-purple-900/50 rounded text-xs text-purple-300">Tout PRO +</span>
+                    <span className="px-2 py-1 bg-purple-900/50 rounded text-xs text-purple-300">Tout Starter +</span>
                     <span className="px-2 py-1 bg-purple-900/50 rounded text-xs text-purple-300">Coaching IA</span>
+                    <span className="px-2 py-1 bg-purple-900/50 rounded text-xs text-purple-300">Export PDF</span>
                     <span className="px-2 py-1 bg-purple-900/50 rounded text-xs text-purple-300">Comparaison Pro</span>
                   </>
                 ) : (
@@ -654,6 +653,7 @@ export default function SettingsPage() {
           </Button>
         </div>
       </form>
+
     </div>
   );
 }

@@ -32,6 +32,10 @@ model User {
   stripeCustomerId  String?          @unique  // Pour Stripe
   stripeSubscriptionId String?       // ID de l'abonnement Stripe actif
 
+  // Flags de test
+  isBetaTester      Boolean   @default(false)  // Accès aux features beta
+  isAlphaTester     Boolean   @default(false)  // Accès aux features alpha (dev)
+
   // Limites et quotas (calculés dynamiquement selon le tier, mais overridable)
   storageUsedMb     Int       @default(0)
   maxStorageMb      Int       @default(500)    // Override possible par admin
@@ -51,9 +55,11 @@ model User {
   lastLoginAt   DateTime?
 
   // Relations
-  demos         Demo[]
-  sessions      Session[]
-  stats         UserStats?
+  demos              Demo[]
+  sessions           Session[]
+  stats              UserStats?
+  featurePreferences UserFeaturePreferences?
+  featureOverrides   UserFeatureOverride[]
 
   // Relations équipe (préparé pour le futur)
   teamMemberships TeamMember[]
@@ -74,8 +80,8 @@ enum SystemRole {
 // Niveau d'abonnement
 enum SubscriptionTier {
   FREE           // Gratuit, limité
-  PRO            // Payant, fonctionnalités complètes
-  PRO_PLUS       // Premium, coaching IA avancé
+  STARTER        // Starter, fonctionnalités essentielles
+  PRO            // Pro, fonctionnalités complètes
   TEAM           // Plan équipe (attribué via Team)
   ENTERPRISE     // Sur mesure
 }
@@ -684,6 +690,88 @@ model TrainingPlan {
   updatedAt     DateTime @updatedAt
 
   @@index([userId])
+}
+
+// ============================================
+// FEATURE FLAGS & PRÉFÉRENCES
+// ============================================
+
+// Préférences de features d'un utilisateur
+model UserFeaturePreferences {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Features explicitement désactivées par l'utilisateur
+  disabledFeatures String[]  @default([])
+
+  // Features explicitement activées (pour celles désactivées par défaut)
+  enabledFeatures  String[]  @default([])
+
+  // Configuration spécifique par feature (JSONB)
+  featureConfigs   Json      @default("{}")
+  // {
+  //   "display.heatmaps": { showLabels: true, colorScheme: "default" },
+  //   "coaching.weekly_plan": { daysPerWeek: 5, minutesPerDay: 30 }
+  // }
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// Override administrateur pour un utilisateur
+model UserFeatureOverride {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Feature concernée
+  featureId     String
+
+  // Forcer l'activation ou la désactivation
+  enabled       Boolean
+
+  // Raison de l'override (pour l'admin)
+  reason        String?
+
+  // Date d'expiration de l'override (null = permanent)
+  expiresAt     DateTime?
+
+  // Qui a créé cet override
+  createdBy     String?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([userId, featureId])
+  @@index([userId])
+  @@index([featureId])
+  @@index([expiresAt])
+}
+
+// Utilisation des features (pour les limites)
+model FeatureUsage {
+  id            String   @id @default(cuid())
+  userId        String
+
+  // Feature concernée
+  featureId     String
+
+  // Période de comptage
+  periodStart   DateTime
+  periodEnd     DateTime
+
+  // Compteur d'utilisation
+  count         Int      @default(0)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([userId, featureId, periodStart])
+  @@index([userId, featureId])
+  @@index([periodEnd])
 }
 
 // ============================================

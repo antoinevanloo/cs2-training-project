@@ -12,6 +12,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
+import { TIER_BG_COLORS } from '@/lib/constants/tiers';
 
 interface AdminStats {
   users: {
@@ -64,13 +65,7 @@ const statusColors: Record<string, { bg: string; text: string; icon: React.React
   FAILED: { bg: 'bg-red-500/20', text: 'text-red-400', icon: <AlertCircle className="w-4 h-4" /> },
 };
 
-const tierColors: Record<string, string> = {
-  FREE: 'bg-gray-600',
-  PRO: 'bg-blue-600',
-  PRO_PLUS: 'bg-purple-600',
-  TEAM: 'bg-green-600',
-  ENTERPRISE: 'bg-yellow-600',
-};
+const tierColors = TIER_BG_COLORS;
 
 export default function AdminDashboardPage() {
   const [stats, setStats] = useState<AdminStats | null>(null);

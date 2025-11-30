@@ -87,8 +87,8 @@ export async function POST(req: NextRequest) {
     // Vérifier les quotas
     const tierLimits: Record<string, { demosPerMonth: number; storageMb: number }> = {
       FREE: { demosPerMonth: 5, storageMb: 500 },
-      PRO: { demosPerMonth: 50, storageMb: 5000 },
-      PRO_PLUS: { demosPerMonth: 200, storageMb: 20000 },
+      STARTER: { demosPerMonth: 50, storageMb: 1000 },
+      PRO: { demosPerMonth: 200, storageMb: 5000 },
       TEAM: { demosPerMonth: 500, storageMb: 50000 },
       ENTERPRISE: { demosPerMonth: 9999, storageMb: 100000 },
     };

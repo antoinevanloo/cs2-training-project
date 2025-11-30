@@ -1,8 +1,22 @@
-import { SubscriptionTier } from '@prisma/client';
-
 /**
  * Configuration des limites et fonctionnalités par niveau d'abonnement
  */
+
+import {
+  SubscriptionTier,
+  TIER_ORDER,
+  PURCHASABLE_TIERS,
+  isTierHigherThan,
+} from '@/lib/constants/tiers';
+
+// Re-export depuis la source centralisée
+export type { SubscriptionTier };
+export { TIER_ORDER, PURCHASABLE_TIERS, isTierHigherThan };
+
+// Alias pour compatibilité arrière
+export function getPurchasableTiers(): SubscriptionTier[] {
+  return PURCHASABLE_TIERS;
+}
 
 // Fonctionnalités disponibles
 export type Feature =
@@ -63,38 +77,37 @@ export const TIER_CONFIGS: Record<SubscriptionTier, TierConfig> = {
     ],
   },
 
-  PRO: {
-    name: 'Pro',
-    description: 'Pour les joueurs sérieux qui veulent progresser',
+  STARTER: {
+    name: 'Starter',
+    description: 'Pour débuter sérieusement votre progression',
     price: {
-      monthly: 6,
-      yearly: 60,  // 2 mois offerts
+      monthly: 5,
+      yearly: 50,  // 2 mois offerts
     },
     limits: {
-      demosPerMonth: -1,
+      demosPerMonth: 50,
       historyDays: -1,
-      storageMaxMb: 2000,
+      storageMaxMb: 1000,
     },
     features: [
       'basic_stats',
       'full_analysis',
       'coaching_tips',
       'advanced_coaching',
-      'export_pdf',
       'progress_tracking',
     ],
     badge: {
-      text: 'PRO',
+      text: 'STARTER',
       color: 'blue',
     },
   },
 
-  PRO_PLUS: {
-    name: 'Pro+',
+  PRO: {
+    name: 'Pro',
     description: 'Le maximum pour atteindre vos objectifs',
     price: {
-      monthly: 12,
-      yearly: 108,  // 3 mois offerts
+      monthly: 10,
+      yearly: 100,  // 2 mois offerts
     },
     limits: {
       demosPerMonth: -1,
@@ -113,7 +126,7 @@ export const TIER_CONFIGS: Record<SubscriptionTier, TierConfig> = {
       'priority_processing',
     ],
     badge: {
-      text: 'PRO+',
+      text: 'PRO',
       color: 'purple',
     },
   },
@@ -244,24 +257,6 @@ export function getVisibleHistoryDate(tier: SubscriptionTier): Date | null {
   const date = new Date();
   date.setDate(date.getDate() - days);
   return date;
-}
-
-/**
- * Retourne les tiers disponibles à l'achat (pour la page pricing)
- */
-export function getPurchasableTiers(): SubscriptionTier[] {
-  return ['FREE', 'PRO', 'PRO_PLUS', 'TEAM'];
-}
-
-/**
- * Vérifie si un tier est supérieur à un autre
- */
-export function isTierHigherThan(
-  tier: SubscriptionTier,
-  compareTo: SubscriptionTier
-): boolean {
-  const tierOrder: SubscriptionTier[] = ['FREE', 'PRO', 'PRO_PLUS', 'TEAM', 'ENTERPRISE'];
-  return tierOrder.indexOf(tier) > tierOrder.indexOf(compareTo);
 }
 
 /**

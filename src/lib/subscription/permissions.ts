@@ -75,7 +75,7 @@ export function canAccessFeature(
   }
 
   // Trouver le tier minimum requis
-  const tiers: SubscriptionTier[] = ['FREE', 'PRO', 'PRO_PLUS', 'TEAM', 'ENTERPRISE'];
+  const tiers: SubscriptionTier[] = ['FREE', 'STARTER', 'PRO', 'TEAM', 'ENTERPRISE'];
   const requiredTier = tiers.find((t) => hasFeature(t, feature));
 
   return {

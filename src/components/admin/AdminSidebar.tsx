@@ -15,6 +15,7 @@ import {
   ChevronLeft,
   Shield,
   Map,
+  ToggleLeft,
 } from 'lucide-react';
 import { getActiveModules, type AdminModule } from '@/lib/admin/config';
 
@@ -30,6 +31,7 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   Settings,
   SlidersHorizontal,
   Map,
+  ToggleLeft,
 };
 
 interface AdminSidebarProps {

@@ -124,6 +124,16 @@ export const ADMIN_MODULES: AdminModule[] = [
     order: 4,
   },
   {
+    id: 'features',
+    name: 'Features',
+    description: 'Gestion des fonctionnalités et tiers',
+    icon: 'ToggleLeft',
+    href: '/dashboard/admin/features',
+    requiredRole: 'ADMIN',
+    enabled: true,
+    order: 5,
+  },
+  {
     id: 'teams',
     name: 'Équipes',
     description: 'Gestion des équipes',

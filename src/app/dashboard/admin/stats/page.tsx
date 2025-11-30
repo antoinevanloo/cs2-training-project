@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { TIER_BG_COLORS } from '@/lib/constants/tiers';
 
 interface PlatformStats {
   users: {
@@ -103,13 +104,7 @@ export default function AdminStatsPage() {
     );
   }
 
-  const tierColors: Record<string, string> = {
-    FREE: 'bg-gray-600',
-    PRO: 'bg-blue-600',
-    PRO_PLUS: 'bg-purple-600',
-    TEAM: 'bg-green-600',
-    ENTERPRISE: 'bg-yellow-600',
-  };
+  const tierColors = TIER_BG_COLORS;
 
   return (
     <div className="space-y-6">

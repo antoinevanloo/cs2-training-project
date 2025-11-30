@@ -1,14 +1,14 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 interface CategoryScores {
-  aim: number;
-  positioning: number;
-  utility: number;
-  economy: number;
-  timing: number;
-  decision: number;
+  aim?: number;
+  positioning?: number;
+  utility?: number;
+  economy?: number;
+  timing?: number;
+  decision?: number;
 }
 
 interface CategoryRadarChartProps {
@@ -66,6 +66,11 @@ export function CategoryRadarChart({
   showLegend = true,
   className = '',
 }: CategoryRadarChartProps) {
+  const [tooltip, setTooltip] = useState<{
+    x: number;
+    y: number;
+    content: string;
+  } | null>(null);
   const center = size / 2;
   const maxRadius = size / 2 - (showLabels ? 30 : 10);
 
@@ -167,17 +172,56 @@ export function CategoryRadarChart({
           const radius = (score / 100) * maxRadius;
           const point = polarToCartesian(center, center, radius, cat.angle);
           return (
-            <circle
+            <g
               key={cat.key}
-              cx={point.x}
-              cy={point.y}
-              r={4}
-              fill="rgb(249, 115, 22)"
-              stroke="white"
-              strokeWidth={2}
-            />
+              onMouseEnter={() =>
+                setTooltip({
+                  x: point.x,
+                  y: point.y,
+                  content: `${cat.label}: ${score.toFixed(0)}`,
+                })
+              }
+              onMouseLeave={() => setTooltip(null)}
+              className="cursor-pointer"
+            >
+              <circle
+                cx={point.x}
+                cy={point.y}
+                r={5}
+                fill="rgb(249, 115, 22)"
+                stroke="white"
+                strokeWidth={2}
+              />
+            </g>
           );
         })}
+
+        {/* Tooltip */}
+        {tooltip && (
+          <g transform={`translate(${tooltip.x}, ${tooltip.y - 20})`}>
+            <rect
+              x="-50"
+              y="-15"
+              width="100"
+              height="24"
+              rx="8"
+              ry="8"
+              fill="#1f2937"
+              stroke="#374151"
+              strokeWidth="1"
+            />
+            <text
+              x="0"
+              y="0"
+              textAnchor="middle"
+              dominantBaseline="middle"
+              className="text-xs font-bold"
+              fill="#ffffff"
+            >
+              {tooltip.content}
+            </text>
+          </g>
+        )}
 
         {/* Labels */}
         {showLabels &&
