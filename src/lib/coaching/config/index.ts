@@ -104,3 +104,19 @@ export {
   type RuleFeatureConfig,
   type CategoryFeatures,
 } from './features';
+
+// Workshop Maps (configuration des liens Steam)
+export {
+  WORKSHOP_MAPS_CONFIG,
+  getWorkshopUrl,
+  getWorkshopWebUrl,
+  getWorkshopMapById,
+  getWorkshopMapsByCategory,
+  getVerifiedWorkshopMaps,
+  getUnverifiedWorkshopMaps,
+  hasValidSteamLink,
+  updateWorkshopMapSteamId,
+  getWorkshopMapsStats,
+  WORKSHOP_MAP_IDS,
+  type WorkshopMapConfig,
+} from './workshop-maps';

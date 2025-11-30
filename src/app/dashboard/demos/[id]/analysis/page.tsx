@@ -7,6 +7,9 @@ import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { CircularProgress } from '@/components/ui/Progress';
+import { RankComparisonWrapper } from '@/components/dashboard/RankComparisonWrapper';
+import { AnalysisTabs } from '@/components/dashboard/AnalysisTabs';
+import prisma from '@/lib/db/prisma';
 
 // Mapping des noms de catégories vers les clés de features
 const categoryMapping: Record<string, string> = {
@@ -150,7 +153,13 @@ function AnalysisSection({
 
 export default async function AnalysisPage({ params }: AnalysisPageProps) {
   const user = await requireAuth();
-  const demo = await getDemoById(params.id);
+  const [demo, userData] = await Promise.all([
+    getDemoById(params.id),
+    prisma.user.findUnique({
+      where: { id: user.id },
+      select: { rank: true, targetRank: true },
+    }),
+  ]);
 
   if (!demo || demo.userId !== user.id) {
     notFound();
@@ -286,6 +295,76 @@ export default async function AnalysisPage({ params }: AnalysisPageProps) {
               </div>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Comparaison vs Rang Cible */}
+      {(() => {
+        const mainPlayer = demo.playerStats.find((p) => p.isMainPlayer);
+        if (!mainPlayer) return null;
+
+        return (
+          <RankComparisonWrapper
+            playerStats={{
+              rating: mainPlayer.rating,
+              adr: mainPlayer.adr,
+              kast: mainPlayer.kast,
+              hsPercent: mainPlayer.headshotPercentage,
+            }}
+            currentRank={userData?.rank}
+            targetRank={userData?.targetRank}
+          />
+        );
+      })()}
+
+      {/* Nouvelle section avec Tabs, Heatmap, Insights */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Analyse Détaillée</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <AnalysisTabs
+            analysis={{
+              overallScore: analysis.overallScore,
+              aimScore: analysis.aimScore,
+              positioningScore: analysis.positioningScore,
+              utilityScore: analysis.utilityScore,
+              economyScore: analysis.economyScore,
+              timingScore: analysis.timingScore,
+              decisionScore: analysis.decisionScore,
+              aimAnalysis: analysis.aimAnalysis,
+              positioningAnalysis: analysis.positioningAnalysis,
+              utilityAnalysis: analysis.utilityAnalysis,
+              economyAnalysis: analysis.economyAnalysis,
+              timingAnalysis: analysis.timingAnalysis,
+              decisionAnalysis: analysis.decisionAnalysis,
+              strengths: filteredStrengths,
+              weaknesses: filteredWeaknesses,
+              coachingReport: coachingReport,
+            }}
+            mapName={demo.mapName}
+            playerDeaths={
+              // Utiliser individualDeaths (positions individuelles) plutôt que deathPositions (clusters)
+              (((analysis.positioningAnalysis as any)?.individualDeaths) || []).map((pos: any) => ({
+                x: pos.x ?? 0,
+                y: pos.y ?? 0,
+                round: pos.round,
+                weapon: pos.weapon,
+                wasTraded: pos.wasTraded ?? false,
+                wasBlind: pos.wasBlind ?? false,
+              }))
+            }
+            playerKills={
+              // Utiliser killPositions des données d'analyse aim
+              (((analysis.aimAnalysis as any)?.killPositions) || []).map((pos: any) => ({
+                x: pos.x ?? 0,
+                y: pos.y ?? 0,
+                round: pos.round,
+                weapon: pos.weapon,
+                wasHeadshot: pos.wasHeadshot ?? false,
+              }))
+            }
+          />
         </CardContent>
       </Card>
 

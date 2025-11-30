@@ -30,6 +30,9 @@ interface TierLimits {
 interface UserSettings {
   username: string;
   steamId: string | null;
+  steamUsername: string | null;
+  matchHistoryAuthCode: string | null;
+  lastMatchSync: string | null;
   role: string | null;
   rank: string | null;
   preferredMaps: string[];
@@ -63,6 +66,14 @@ export default function SettingsPage() {
   const [availableRoles, setAvailableRoles] = useState<RoleOption[]>([]);
   const [availableRanks, setAvailableRanks] = useState<RoleOption[]>([]);
 
+  // Steam integration state
+  const [steamUsername, setSteamUsername] = useState<string | null>(null);
+  const [matchHistoryAuthCode, setMatchHistoryAuthCode] = useState('');
+  const [initialShareCode, setInitialShareCode] = useState('');
+  const [lastMatchSync, setLastMatchSync] = useState<string | null>(null);
+  const [isSyncingMatches, setIsSyncingMatches] = useState(false);
+  const [steamSyncMessage, setSteamSyncMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   // Subscription state
   const [tierName, setTierName] = useState('Free');
   const [effectiveTier, setEffectiveTier] = useState('FREE');
@@ -87,6 +98,10 @@ export default function SettingsPage() {
           setMaxStorageMb(data.maxStorageMb || 500);
           setAvailableRoles(data.availableRoles || []);
           setAvailableRanks(data.availableRanks || []);
+          // Steam integration
+          setSteamUsername(data.steamUsername);
+          setMatchHistoryAuthCode(data.matchHistoryAuthCode || '');
+          setLastMatchSync(data.lastMatchSync);
           // Subscription info
           setTierName(data.tierName || 'Free');
           setEffectiveTier(data.effectiveTier || 'FREE');
@@ -149,6 +164,83 @@ export default function SettingsPage() {
   };
 
   const storagePercentage = maxStorageMb > 0 ? (storageUsedMb / maxStorageMb) * 100 : 0;
+
+  // Sauvegarder le code d'auth Steam
+  const handleSaveAuthCode = async () => {
+    if (!matchHistoryAuthCode.trim()) {
+      setSteamSyncMessage({ type: 'error', text: 'Veuillez entrer un code d\'authentification' });
+      return;
+    }
+
+    setIsSyncingMatches(true);
+    setSteamSyncMessage(null);
+
+    try {
+      const response = await fetch('/api/steam/matches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ matchHistoryAuthCode }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Erreur lors de la sauvegarde');
+      }
+
+      setSteamSyncMessage({ type: 'success', text: 'Code d\'authentification sauvegardé' });
+    } catch (error) {
+      setSteamSyncMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Erreur lors de la sauvegarde',
+      });
+    } finally {
+      setIsSyncingMatches(false);
+    }
+  };
+
+  // Synchroniser les matchs Steam
+  const handleSyncMatches = async () => {
+    if (!steamId) {
+      setSteamSyncMessage({ type: 'error', text: 'Configurez d\'abord votre Steam ID' });
+      return;
+    }
+
+    if (!matchHistoryAuthCode) {
+      setSteamSyncMessage({ type: 'error', text: 'Configurez d\'abord votre code d\'authentification' });
+      return;
+    }
+
+    setIsSyncingMatches(true);
+    setSteamSyncMessage(null);
+
+    try {
+      const response = await fetch('/api/steam/matches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Erreur lors de la synchronisation');
+      }
+
+      setLastMatchSync(new Date().toISOString());
+      setSteamSyncMessage({
+        type: 'success',
+        text: `${data.newMatchesCount || 0} nouveau(x) match(s) trouvé(s)`,
+      });
+    } catch (error) {
+      setSteamSyncMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Erreur lors de la synchronisation',
+      });
+    } finally {
+      setIsSyncingMatches(false);
+    }
+  };
 
   if (isFetching) {
     return (
@@ -328,6 +420,123 @@ export default function SettingsPage() {
                   Le Steam ID est requis pour analyser vos demos. Configurez-le pour pouvoir uploader.
                 </p>
               )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Steam Integration */}
+        <Card className="mb-6">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Intégration Steam</CardTitle>
+              {steamUsername && (
+                <span className="text-sm text-green-400 flex items-center gap-1">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  Connecté ({steamUsername})
+                </span>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {steamSyncMessage && (
+              <div
+                className={`p-3 rounded-lg text-sm ${
+                  steamSyncMessage.type === 'success'
+                    ? 'bg-green-500/10 border border-green-500/50 text-green-400'
+                    : 'bg-red-500/10 border border-red-500/50 text-red-400'
+                }`}
+              >
+                {steamSyncMessage.text}
+              </div>
+            )}
+
+            <div>
+              <Input
+                label="Code d'authentification Match History"
+                placeholder="XXXX-XXXX-XXXX"
+                value={matchHistoryAuthCode}
+                onChange={(e) => setMatchHistoryAuthCode(e.target.value)}
+              />
+              <div className="mt-2 p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg">
+                <p className="text-sm text-purple-300 font-medium mb-1">
+                  Comment obtenir ce code ?
+                </p>
+                <ol className="text-xs text-purple-200/80 space-y-1 list-decimal list-inside">
+                  <li>Ouvrez Steam dans votre navigateur</li>
+                  <li>
+                    Allez sur{' '}
+                    <a
+                      href="https://help.steampowered.com/fr/wizard/HelpWithGameIssue/?appid=730&issueid=128"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline hover:text-purple-300"
+                    >
+                      la page de support CS2 de Steam
+                    </a>
+                  </li>
+                  <li>Connectez-vous si nécessaire</li>
+                  <li>Copiez le &quot;Match History Authentication Code&quot; affiché</li>
+                </ol>
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <Input
+                label="Share Code d'un match récent (requis pour démarrer)"
+                placeholder="CSGO-xxxxx-xxxxx-xxxxx-xxxxx-xxxxx"
+                value={initialShareCode}
+                onChange={(e) => setInitialShareCode(e.target.value)}
+              />
+              <div className="mt-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                <p className="text-sm text-amber-300 font-medium mb-1">
+                  Comment obtenir un Share Code ?
+                </p>
+                <ol className="text-xs text-amber-200/80 space-y-1 list-decimal list-inside">
+                  <li>Lancez CS2 et allez dans votre historique de matchs</li>
+                  <li>Cliquez sur un match récent</li>
+                  <li>Cliquez sur &quot;Copier le lien de partage&quot; ou appuyez sur &quot;G&quot;</li>
+                  <li>Le code ressemble à : CSGO-xxxxx-xxxxx-xxxxx-xxxxx-xxxxx</li>
+                </ol>
+                <p className="text-xs text-amber-300/70 mt-2">
+                  Ce code sert de point de départ pour récupérer vos matchs suivants.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-4">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleSaveAuthCode}
+                disabled={isSyncingMatches || !matchHistoryAuthCode.trim()}
+                isLoading={isSyncingMatches}
+              >
+                Sauvegarder
+              </Button>
+
+              <Button
+                type="button"
+                onClick={handleSyncMatches}
+                disabled={isSyncingMatches || !steamId || !matchHistoryAuthCode || !initialShareCode.trim()}
+                isLoading={isSyncingMatches}
+              >
+                Synchroniser les matchs
+              </Button>
+            </div>
+
+            {lastMatchSync && (
+              <p className="text-xs text-gray-500">
+                Dernière synchronisation : {new Date(lastMatchSync).toLocaleString('fr-FR')}
+              </p>
+            )}
+
+            <div className="pt-3 border-t border-gray-700">
+              <p className="text-xs text-gray-500">
+                <strong>Limitations :</strong> Steam ne permet de récupérer que les 8 derniers matchs.
+                Les démos expirent après ~14 jours sur les serveurs Steam.
+              </p>
             </div>
           </CardContent>
         </Card>

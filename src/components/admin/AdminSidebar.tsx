@@ -14,6 +14,7 @@ import {
   SlidersHorizontal,
   ChevronLeft,
   Shield,
+  Map,
 } from 'lucide-react';
 import { getActiveModules, type AdminModule } from '@/lib/admin/config';
 
@@ -28,6 +29,7 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   CreditCard,
   Settings,
   SlidersHorizontal,
+  Map,
 };
 
 interface AdminSidebarProps {

@@ -4,6 +4,30 @@ import { PrismaAdapter } from '@next-auth/prisma-adapter';
 import bcrypt from 'bcryptjs';
 import prisma from '@/lib/db/prisma';
 
+// Étendre les types NextAuth pour inclure steamId
+declare module 'next-auth' {
+  interface User {
+    steamId?: string | null;
+  }
+
+  interface Session {
+    user: {
+      id: string;
+      email?: string | null;
+      name?: string | null;
+      image?: string | null;
+      steamId?: string | null;
+    };
+  }
+}
+
+declare module 'next-auth/jwt' {
+  interface JWT {
+    id: string;
+    steamId?: string | null;
+  }
+}
+
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   session: {
@@ -53,6 +77,7 @@ export const authOptions: NextAuthOptions = {
           email: user.email,
           name: user.username,
           image: user.avatarUrl,
+          steamId: user.steamId,
         };
       },
     }),
@@ -61,12 +86,14 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
+        token.steamId = user.steamId;
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
+        session.user.steamId = token.steamId;
       }
       return session;
     },

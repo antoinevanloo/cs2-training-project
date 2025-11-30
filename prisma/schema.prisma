@@ -20,6 +20,11 @@ model User {
   steamUsername String?
   avatarUrl     String?
 
+  // Steam Match History (pour récupération automatique des démos)
+  matchHistoryAuthCode String?   // Code d'auth fourni par CS2 pour accéder à l'historique
+  lastKnownMatchCode   String?   // Dernier match share code connu (pour pagination)
+  lastMatchSync        DateTime? // Dernière synchronisation des matchs
+
   // Rôle système et abonnement
   systemRole        SystemRole       @default(USER)
   subscriptionTier  SubscriptionTier @default(FREE)

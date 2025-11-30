@@ -55,6 +55,14 @@ export interface AimAnalysis {
   };
   firstBulletAccuracy: number;
   metrics: Record<string, number>;
+  // Kill positions for heatmap
+  killPositions?: Array<{
+    x: number;
+    y: number;
+    round: number;
+    weapon: string;
+    wasHeadshot: boolean;
+  }>;
 }
 
 export interface PositioningAnalysis {
@@ -66,11 +74,21 @@ export interface PositioningAnalysis {
     average: number;
     optimal: number;
   };
+  // Clustered death positions for analysis
   deathPositions: Array<{
     x: number;
     y: number;
     count: number;
     isBadPosition: boolean;
+  }>;
+  // Individual death positions for heatmap
+  individualDeaths?: Array<{
+    x: number;
+    y: number;
+    round: number;
+    weapon?: string;
+    wasTraded: boolean;
+    wasBlind?: boolean;
   }>;
   commonMistakes: string[];
   metrics: Record<string, number>;

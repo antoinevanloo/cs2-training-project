@@ -105,7 +105,7 @@ NEXTAUTH_SECRET="générer-avec-openssl-rand-base64-32"
 
 # Storage
 STORAGE_PATH="/data"
-MAX_UPLOAD_SIZE_MB="150"
+MAX_UPLOAD_SIZE_MB="300"
 MAX_STORAGE_PER_USER_MB="500"
 DEMO_RETENTION_DAYS="30"
 
@@ -151,7 +151,7 @@ Accédez à `/register` et créez votre compte avec email/mot de passe.
 
 ### 2. Uploader une démo
 - Allez sur `/dashboard/demos/upload`
-- Sélectionnez votre fichier `.dem` (max 150MB)
+- Sélectionnez votre fichier `.dem` (max 300MB)
 - Attendez le traitement (2-5 minutes selon la taille)
 
 ### 3. Consulter l'analyse

@@ -87,6 +87,20 @@ export const ADMIN_MODULES: AdminModule[] = [
         enabled: true,
         order: 1,
       },
+      {
+        id: 'coaching-workshop-maps',
+        name: 'Workshop Maps',
+        description: 'Gérer les liens Steam Workshop des exercices',
+        icon: 'Map',
+        href: '/dashboard/admin/coaching/workshop-maps',
+        requiredRole: 'ADMIN',
+        badge: {
+          type: 'count',
+          endpoint: '/api/admin/coaching/workshop-maps/unverified-count',
+        },
+        enabled: true,
+        order: 2,
+      },
     ],
   },
   {

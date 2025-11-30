@@ -39,6 +39,9 @@ export async function GET() {
       select: {
         username: true,
         steamId: true,
+        steamUsername: true,
+        matchHistoryAuthCode: true,
+        lastMatchSync: true,
         role: true,
         rank: true,
         targetRank: true,
