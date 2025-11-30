@@ -168,44 +168,121 @@ def extract_players(parser: DemoParser) -> list:
     return players
 
 
+def get_position_from_row(row, prefix: str) -> dict:
+    """
+    Extrait les coordonnées de position depuis une ligne avec différents formats possibles.
+    CS2/demoparser2 peut utiliser différents noms de colonnes selon la version.
+    """
+    # Formats possibles pour les coordonnées
+    x_cols = [f"{prefix}_X", f"{prefix}_x", f"{prefix}X", f"{prefix}x",
+              f"{prefix}_position_x", f"{prefix}_pos_x", f"{prefix}PositionX"]
+    y_cols = [f"{prefix}_Y", f"{prefix}_y", f"{prefix}Y", f"{prefix}y",
+              f"{prefix}_position_y", f"{prefix}_pos_y", f"{prefix}PositionY"]
+    z_cols = [f"{prefix}_Z", f"{prefix}_z", f"{prefix}Z", f"{prefix}z",
+              f"{prefix}_position_z", f"{prefix}_pos_z", f"{prefix}PositionZ"]
+
+    x, y, z = 0.0, 0.0, 0.0
+
+    for col in x_cols:
+        val = row.get(col)
+        if val is not None and val != "" and not (isinstance(val, float) and val != val):  # Check for NaN
+            try:
+                x = float(val)
+                break
+            except (ValueError, TypeError):
+                pass
+
+    for col in y_cols:
+        val = row.get(col)
+        if val is not None and val != "" and not (isinstance(val, float) and val != val):
+            try:
+                y = float(val)
+                break
+            except (ValueError, TypeError):
+                pass
+
+    for col in z_cols:
+        val = row.get(col)
+        if val is not None and val != "" and not (isinstance(val, float) and val != val):
+            try:
+                z = float(val)
+                break
+            except (ValueError, TypeError):
+                pass
+
+    return {"x": x, "y": y, "z": z}
+
+
 def extract_kills(parser: DemoParser, round_ticks: list) -> list:
-    """Extrait tous les kills."""
+    """Extrait tous les kills avec positions."""
     kills = []
 
     try:
+        # D'abord récupérer les événements de mort pour obtenir les ticks
         df = parser.parse_event("player_death")
-        if df is not None and len(df) > 0:
-            for _, row in df.iterrows():
-                tick = int(row.get("tick", 0))
-                # Calculate round from tick since player_death doesn't have round column
-                round_num = get_round_for_tick(tick, round_ticks)
+        if df is None or len(df) == 0:
+            return kills
 
-                kills.append({
-                    "tick": tick,
-                    "round": round_num,
-                    "attackerSteamId": str(row.get("attacker_steamid", "")),
-                    "attackerName": str(row.get("attacker_name", "")),
-                    "victimSteamId": str(row.get("user_steamid", "")),
-                    "victimName": str(row.get("user_name", "")),
-                    "weapon": str(row.get("weapon", "")),
-                    "headshot": bool(row.get("headshot", False)),
-                    "penetrated": bool(row.get("penetrated", False)),
-                    "attackerBlind": bool(row.get("attackerblind", False)),
-                    "noScope": bool(row.get("noscope", False)),
-                    "throughSmoke": bool(row.get("thrusmoke", False)),
-                    "attackerPosition": {
-                        "x": float(row.get("attacker_X", 0) or 0),
-                        "y": float(row.get("attacker_Y", 0) or 0),
-                        "z": float(row.get("attacker_Z", 0) or 0),
-                    },
-                    "victimPosition": {
-                        "x": float(row.get("user_X", 0) or 0),
-                        "y": float(row.get("user_Y", 0) or 0),
-                        "z": float(row.get("user_Z", 0) or 0),
-                    },
-                })
-    except Exception:
-        pass
+        # Récupérer les ticks uniques des morts pour limiter le parsing des positions
+        kill_ticks = list(df["tick"].unique())
+
+        # Parser les positions seulement pour les ticks de mort
+        player_positions = {}
+        try:
+            # Parser les positions aux ticks de mort (X, Y, Z majuscules pour demoparser2)
+            pos_df = parser.parse_ticks(["X", "Y", "Z", "steamid"], ticks=kill_ticks)
+            if pos_df is not None and len(pos_df) > 0:
+                for _, row in pos_df.iterrows():
+                    tick = int(row.get("tick", 0))
+                    steamid = str(row.get("steamid", ""))
+                    x = row.get("X")
+                    y = row.get("Y")
+                    z = row.get("Z")
+
+                    # Vérifier que les coordonnées sont valides
+                    if steamid and tick and x is not None:
+                        key = f"{tick}_{steamid}"
+                        player_positions[key] = {
+                            "x": float(x) if x == x else 0.0,  # Check for NaN
+                            "y": float(y) if y == y else 0.0,
+                            "z": float(z) if z == z else 0.0,
+                        }
+        except Exception as e:
+            print(f"Warning: Could not extract positions: {e}", file=sys.stderr)
+
+        # Maintenant traiter chaque kill
+        for _, row in df.iterrows():
+            tick = int(row.get("tick", 0))
+            round_num = get_round_for_tick(tick, round_ticks)
+
+            attacker_steamid = str(row.get("attacker_steamid", ""))
+            victim_steamid = str(row.get("user_steamid", ""))
+
+            # Récupérer les positions depuis les données de tick
+            attacker_key = f"{tick}_{attacker_steamid}"
+            victim_key = f"{tick}_{victim_steamid}"
+
+            attacker_pos = player_positions.get(attacker_key, {"x": 0.0, "y": 0.0, "z": 0.0})
+            victim_pos = player_positions.get(victim_key, {"x": 0.0, "y": 0.0, "z": 0.0})
+
+            kills.append({
+                "tick": tick,
+                "round": round_num,
+                "attackerSteamId": attacker_steamid,
+                "attackerName": str(row.get("attacker_name", "")),
+                "victimSteamId": victim_steamid,
+                "victimName": str(row.get("user_name", "")),
+                "weapon": str(row.get("weapon", "")),
+                "headshot": bool(row.get("headshot", False)),
+                "penetrated": bool(row.get("penetrated", False)),
+                "attackerBlind": bool(row.get("attackerblind", False)),
+                "noScope": bool(row.get("noscope", False)),
+                "throughSmoke": bool(row.get("thrusmoke", False)),
+                "attackerPosition": attacker_pos,
+                "victimPosition": victim_pos,
+            })
+    except Exception as e:
+        print(f"Error extracting kills: {e}", file=sys.stderr)
 
     return kills
 
