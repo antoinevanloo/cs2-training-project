@@ -1,32 +1,31 @@
 import { NextResponse } from 'next/server';
 import { requireAuthAPI } from '@/lib/auth/utils';
 import { saveDemoFile, deleteDemoFile } from '@/lib/storage/local';
-import { createDemo, getDemoByChecksum } from '@/lib/db/queries/demos';
-import { checkStorageLimit, updateUserStorageUsage, getUserById } from '@/lib/db/queries/users';
+import { getDemoByChecksum } from '@/lib/db/queries/demos';
+import { getUserById } from '@/lib/db/queries/users';
 import { getJobQueue, JOB_TYPES } from '@/lib/jobs/queue';
 import { storageConfig } from '@/lib/storage/config';
-import { validateDemoFile } from '@/lib/demo-parser/parser';
 import {
   getUserSubscription,
   canUploadDemo,
-  incrementDemoCount,
   resetDemoCountIfNeeded,
   getTierConfig,
   getEffectiveTier,
 } from '@/lib/subscription';
+import prisma from '@/lib/db/prisma';
 
 export async function POST(request: Request) {
+  const user = await requireAuthAPI();
+  if (!user) {
+    return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
+  }
+
+  let savedFilePath: string | null = null;
+  let demoId: string | null = null;
+  let fileSizeMb = 0;
+  let transactionCompleted = false;
+
   try {
-    const user = await requireAuthAPI();
-
-    if (!user) {
-      return NextResponse.json(
-        { error: 'Non authentifié' },
-        { status: 401 }
-      );
-    }
-
-    // Vérifier que l'utilisateur a configuré son Steam ID
     const fullUser = await getUserById(user.id);
     if (!fullUser?.steamId) {
       return NextResponse.json(
@@ -39,44 +38,27 @@ export async function POST(request: Request) {
       );
     }
 
-    // Parse form data
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
 
     if (!file) {
-      return NextResponse.json(
-        { error: 'Aucun fichier fourni' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Aucun fichier fourni' }, { status: 400 });
     }
 
-    // Validate file extension
     if (!file.name.toLowerCase().endsWith('.dem')) {
-      return NextResponse.json(
-        { error: 'Seuls les fichiers .dem sont acceptés' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Seuls les fichiers .dem sont acceptés' }, { status: 400 });
     }
 
-    // Validate file size
-    const fileSizeMb = file.size / (1024 * 1024);
+    fileSizeMb = file.size / (1024 * 1024);
     if (fileSizeMb > storageConfig.maxUploadSizeMb) {
-      return NextResponse.json(
-        { error: `Le fichier ne doit pas dépasser ${storageConfig.maxUploadSizeMb} MB` },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: `Le fichier ne doit pas dépasser ${storageConfig.maxUploadSizeMb} MB` }, { status: 400 });
     }
 
-    // Reset demo count if new month
     await resetDemoCountIfNeeded(user.id);
 
-    // Check subscription limits (demos per month + storage)
     const userSubscription = await getUserSubscription(user.id);
     if (!userSubscription) {
-      return NextResponse.json(
-        { error: 'Utilisateur non trouvé' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Utilisateur non trouvé' }, { status: 404 });
     }
 
     const uploadPermission = await canUploadDemo(userSubscription, fileSizeMb);
@@ -93,37 +75,16 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check storage limit (legacy check - now handled by canUploadDemo)
-    const hasSpace = await checkStorageLimit(user.id, fileSizeMb);
-    if (!hasSpace) {
-      return NextResponse.json(
-        { error: 'Limite de stockage atteinte. Supprimez des demos ou archivez-les.' },
-        { status: 400 }
-      );
-    }
-
-    // Read file buffer
     const buffer = Buffer.from(await file.arrayBuffer());
+    const { filename, path: filePath, checksum, sizeMb } = await saveDemoFile(user.id, buffer, file.name);
+    savedFilePath = filePath;
 
-    // Save file to storage
-    console.log('[Upload] Saving file for user:', user.id);
-    const { filename, path: filePath, checksum, sizeMb } = await saveDemoFile(
-      user.id,
-      buffer,
-      file.name
-    );
-    console.log('[Upload] File saved to:', filePath);
-
-    // Check for duplicate
     const existingDemo = await getDemoByChecksum(checksum);
     if (existingDemo) {
-      return NextResponse.json(
-        { error: 'Cette demo a déjà été uploadée' },
-        { status: 409 }
-      );
+      await deleteDemoFile(filePath);
+      return NextResponse.json({ error: 'Cette demo a déjà été uploadée' }, { status: 409 });
     }
 
-    // Récupérer la date de modification du fichier original (envoyée depuis le client)
     const fileLastModifiedStr = formData.get('fileLastModified') as string | null;
     let fileLastModified: Date | undefined;
     if (fileLastModifiedStr) {
@@ -133,56 +94,92 @@ export async function POST(request: Request) {
       }
     }
 
-    // Create demo record
-    const demo = await createDemo({
-      userId: user.id,
-      filename,
-      originalName: file.name,
-      fileSizeMb: sizeMb,
-      checksum,
-      localPath: filePath,
-      matchDate: fileLastModified, // Date du fichier original (sera mise à jour par le parser si disponible)
+    const newDemo = await prisma.$transaction(async (tx) => {
+      const demo = await tx.demo.create({
+        data: {
+          userId: user.id,
+          filename,
+          originalName: file.name,
+          fileSizeMb: sizeMb,
+          checksum,
+          localPath: filePath,
+          matchDate: fileLastModified || new Date(),
+          mapName: 'pending',
+          duration: 0,
+          scoreTeam1: 0,
+          scoreTeam2: 0,
+          playerTeam: 0,
+          matchResult: 'TIE',
+        },
+      });
+
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          storageUsedMb: { increment: sizeMb },
+          demosThisMonth: { increment: 1 },
+        },
+      });
+      
+      return demo;
     });
+    
+    demoId = newDemo.id;
+    transactionCompleted = true;
 
-    // Update user storage usage
-    await updateUserStorageUsage(user.id, sizeMb);
-
-    // Increment monthly demo count
-    await incrementDemoCount(user.id);
-
-    // Queue processing job
     try {
       const boss = await getJobQueue();
       await boss.send(JOB_TYPES.PROCESS_DEMO, {
-        demoId: demo.id,
+        demoId: newDemo.id,
         userId: user.id,
         filePath,
       });
 
-      // Update demo status to queued
-      await import('@/lib/db/queries/demos').then(({ updateDemoStatus }) =>
-        updateDemoStatus(demo.id, 'QUEUED')
-      );
+      await prisma.demo.update({
+        where: { id: newDemo.id },
+        data: { status: 'QUEUED' },
+      });
     } catch (jobError) {
       console.error('Failed to queue demo processing job:', jobError);
-      // Continue anyway - the demo is saved
+      throw new Error('Failed to queue processing job.');
     }
 
     return NextResponse.json(
       {
-        message: 'Demo uploadée avec succès',
+        message: 'Demo uploadée avec succès et mise en file d\'attente pour traitement.',
         demo: {
-          id: demo.id,
-          filename: demo.filename,
-          status: demo.status,
+          id: newDemo.id,
+          filename: newDemo.filename,
+          status: 'QUEUED',
         },
       },
       { status: 201 }
     );
   } catch (error) {
     console.error('Upload error:', error);
+
+    // Cleanup logic
+    if (savedFilePath) {
+      console.log(`[Upload Error] Cleaning up saved file at ${savedFilePath}`);
+      await deleteDemoFile(savedFilePath).catch(e => console.error("Cleanup failed for file:", e));
+    }
+    
+    if (transactionCompleted && demoId) {
+        console.log(`[Upload Error] Rolling back transaction effects for demo ${demoId}`);
+        // This part is tricky because the transaction is already committed.
+        // We need to manually reverse the operations.
+        await prisma.demo.delete({ where: { id: demoId } }).catch(e => console.error("Cleanup failed for demo DB entry:", e));
+        await prisma.user.update({
+            where: { id: user.id },
+            data: {
+                storageUsedMb: { decrement: fileSizeMb },
+                demosThisMonth: { decrement: 1 },
+            }
+        }).catch(e => console.error("Cleanup failed for user stats:", e));
+    }
+
     return NextResponse.json(
-      { error: 'Erreur lors de l\'upload' },
+      { error: 'Erreur interne du serveur lors de l\'upload. Veuillez réessayer.' },
       { status: 500 }
     );
   }

@@ -18,7 +18,7 @@ Ce fichier contient les directives pour Claude (ou tout autre LLM) travaillant s
 | Frontend | Next.js (App Router) | 14.1.0 |
 | Styling | Tailwind CSS | 3.4.1 |
 | Charts | Recharts | 2.12.0 |
-| Auth | NextAuth.js | 5.0.0-beta.15 |
+| Auth | NextAuth.js | 4.24.7 |
 | ORM | Prisma | 5.10.0 |
 | Database | PostgreSQL | 16 |
 | Queue | pg-boss | 9.0.3 |
@@ -39,7 +39,7 @@ src/
 │   ├── layout/            # Header, Sidebar, Footer
 │   └── dashboard/         # Composants spécifiques dashboard
 ├── lib/
-│   ├── auth/              # Configuration NextAuth v5
+│   ├── auth/              # Configuration NextAuth v4
 │   ├── db/                # Prisma client + queries helper
 │   ├── analysis/          # Moteur d'analyse (6 analyzers + calculators)
 │   ├── coaching/          # Moteur coaching (rules → recommendations)
@@ -113,22 +113,22 @@ export async function getDemosByUserId(
 }
 ```
 
-### Authentification (NextAuth v5)
+### Authentification (NextAuth v4)
 
 ```typescript
-// Configuration dans src/lib/auth/config.ts
-// Utilise le pattern NextAuth() export
+// La configuration se trouve dans un fichier `authOptions` et est utilisée par le handler `[...nextauth]`.
+// Des fonctions utilitaires sont créées pour simplifier la protection des routes.
 
-// Pour protéger une page Server Component:
-import { requireAuth } from '@/lib/auth/utils';
+// Pour protéger une page Server Component (pattern actuel du projet):
+import { requireAuth } from '@/lib/auth/utils'; // Cet utilitaire interne utilise getServerSession
 
 export default async function ProtectedPage() {
-  const user = await requireAuth(); // Redirige si non connecté
+  const user = await requireAuth(); // Redirige si non connecté, retourne l'utilisateur de la session sinon
   // ...
 }
 
-// Pour protéger une API Route:
-import { requireAuthAPI } from '@/lib/auth/utils';
+// Pour protéger une API Route (pattern actuel du projet):
+import { requireAuthAPI } from '@/lib/auth/utils'; // Cet utilitaire interne utilise getServerSession
 
 export async function POST(req: Request) {
   const user = await requireAuthAPI();
@@ -158,7 +158,7 @@ await createJob('PROCESS_DEMO', { demoId: demo.id });
 
 ```typescript
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuthAPI } from '@/lib/auth/utils';
+import { requireAuthAPI } from '@/lib/auth/utils'; // Helper custom basé sur NextAuth v4
 import { z } from 'zod';
 
 const RequestSchema = z.object({
@@ -201,7 +201,7 @@ export async function POST(req: NextRequest) {
 ### Server Component avec Data Fetching
 
 ```typescript
-import { requireAuth } from '@/lib/auth/utils';
+import { requireAuth } from '@/lib/auth/utils'; // Helper custom basé sur NextAuth v4
 import { getData } from '@/lib/db/queries/data';
 
 export default async function Page() {
@@ -279,25 +279,31 @@ npm install -D vitest @testing-library/react
 
 ## Erreurs Courantes à Éviter
 
-### 1. Import NextAuth v5
-```typescript
-// ❌ INCORRECT (ancienne API v4)
-import { getServerSession } from 'next-auth';
-import { authOptions } from './config';
+### 1. Utilisation de NextAuth v4
+Le projet utilise NextAuth v4. Le pattern correct est `getServerSession`.
 
-// ✅ CORRECT (nouvelle API v5)
+```typescript
+// ✅ CORRECT (Pattern utilisé dans le projet)
+import { getServerSession } from 'next-auth';
+import { authOptions } from './config'; // chemin vers vos options
+const session = await getServerSession(authOptions);
+
+// ❌ INCORRECT (Ceci est la nouvelle API v5, non utilisée ici)
 import { auth } from '@/lib/auth/config';
 const session = await auth();
 ```
 
-### 2. Middleware NextAuth v5
-```typescript
-// ❌ INCORRECT
-import { withAuth } from 'next-auth/middleware';
+### 2. Middleware avec NextAuth v4
+Le middleware utilise `getToken` de `next-auth/jwt` pour vérifier la session, ce qui est un pattern valide et correct pour NextAuth v4 avec l'App Router.
 
-// ✅ CORRECT
+```typescript
+// ✅ CORRECT (Implémentation actuelle dans src/middleware.ts)
 import { getToken } from 'next-auth/jwt';
-// Voir src/middleware.ts pour implémentation
+// ... logique du middleware ...
+
+// ❌ À ÉVITER
+// L'ancien helper `withAuth` peut avoir des comportements inattendus avec l'App Router.
+// L'approche `getToken` est plus flexible.
 ```
 
 ### 3. Docker + Prisma
@@ -386,7 +392,7 @@ User (1) ──────< (1) UserStats (cache agrégé)
 
 - [Next.js 14 Docs](https://nextjs.org/docs)
 - [Prisma Docs](https://www.prisma.io/docs)
-- [NextAuth.js v5](https://authjs.dev/)
+- [NextAuth.js v4 Docs](https://next-auth.js.org/)
 - [pg-boss](https://github.com/timgit/pg-boss)
 - [demoparser2](https://github.com/LaihoE/demoparser)
 - [Tailwind CSS](https://tailwindcss.com/docs)

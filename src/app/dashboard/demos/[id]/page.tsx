@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { CircularProgress } from '@/components/ui/Progress';
 import { DeleteDemoButton } from '@/components/demos/DeleteDemoButton';
 import { StrengthWeaknessCard } from '@/components/coaching';
+import { DemoStatusBanner } from '@/components/demos/DemoStatusBanner';
 import { FileText } from 'lucide-react';
 
 export default async function DemoDetailPage({
@@ -72,18 +73,11 @@ export default async function DemoDetailPage({
 
       {/* Status Banner */}
       {isProcessing && (
-        <Card className="p-4 border-blue-500/50 bg-blue-500/10">
-          <div className="flex items-center gap-4">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
-            <div>
-              <p className="font-medium text-white">Traitement en cours</p>
-              <p className="text-sm text-gray-400">
-                Statut: {demo.status}
-                {demo.statusMessage && ` - ${demo.statusMessage}`}
-              </p>
-            </div>
-          </div>
-        </Card>
+        <DemoStatusBanner
+          demoId={demo.id}
+          initialStatus={demo.status}
+          initialStatusMessage={demo.statusMessage}
+        />
       )}
 
       {demo.status === 'FAILED' && (
