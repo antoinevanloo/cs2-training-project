@@ -1,12 +1,14 @@
 'use client';
 
 import { useMemo } from 'react';
+import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/Card';
 import { CircularProgress } from '@/components/ui/Progress';
 import { Button } from '@/components/ui/Button';
 import { StrengthWeaknessCard } from '@/components/coaching';
 import { CategoryRadarChart } from '@/components/charts';
-import { ScoreCard } from '@/components/ui/ScoreCard';
+import { CategoryScoreCard } from '@/components/ui/CategoryScoreCard';
+import { InfoTooltip } from '@/components/ui/InfoTooltip';
 import { MetricDisplay } from '@/components/ui/MetricDisplay';
 import {
   Lightbulb,
@@ -17,6 +19,18 @@ import {
   TrendingUp,
   Target,
   ChevronRight,
+  Crosshair,
+  MapPin,
+  Bomb,
+  DollarSign,
+  Clock,
+  Brain,
+  Move,
+  Eye,
+  Users,
+  Lock,
+  Star,
+  Settings,
 } from 'lucide-react';
 import type { AnalysisCategory } from '@/lib/preferences/types';
 import { CATEGORY_ORDER, getScoreLevel, getScoreColor } from '@/lib/design/tokens';
@@ -71,7 +85,26 @@ interface SummaryTabProps {
   comparison: Comparison | null;
   previousScores?: CategoryScores;
   onCategoryClick?: (category: AnalysisCategory) => void;
+  /** All scores including disabled categories (with original values) */
+  allCategoryScores?: CategoryScores;
+  /** IDs des analyseurs activés */
+  enabledAnalyzers?: string[];
+  /** Catégories prioritaires (affichées avec étoile) */
+  priorityCategories?: AnalysisCategory[];
 }
+
+// Configuration des 9 catégories
+const CATEGORY_CONFIG = [
+  { key: 'aim', featureId: 'analysis.aim', label: 'Aim', icon: Crosshair, color: 'text-red-400', bgColor: 'bg-red-500/20' },
+  { key: 'positioning', featureId: 'analysis.positioning', label: 'Position', icon: MapPin, color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
+  { key: 'utility', featureId: 'analysis.utility', label: 'Utility', icon: Bomb, color: 'text-green-400', bgColor: 'bg-green-500/20' },
+  { key: 'economy', featureId: 'analysis.economy', label: 'Economy', icon: DollarSign, color: 'text-yellow-400', bgColor: 'bg-yellow-500/20' },
+  { key: 'timing', featureId: 'analysis.timing', label: 'Timing', icon: Clock, color: 'text-purple-400', bgColor: 'bg-purple-500/20' },
+  { key: 'decision', featureId: 'analysis.decision', label: 'Decision', icon: Brain, color: 'text-orange-400', bgColor: 'bg-orange-500/20' },
+  { key: 'movement', featureId: 'analysis.movement', label: 'Movement', icon: Move, color: 'text-cyan-400', bgColor: 'bg-cyan-500/20' },
+  { key: 'awareness', featureId: 'analysis.awareness', label: 'Awareness', icon: Eye, color: 'text-pink-400', bgColor: 'bg-pink-500/20' },
+  { key: 'teamplay', featureId: 'analysis.teamplay', label: 'Teamplay', icon: Users, color: 'text-emerald-400', bgColor: 'bg-emerald-500/20' },
+];
 
 // Génère les quick insights basés sur les scores
 function generateQuickInsights(
@@ -146,6 +179,9 @@ export function SummaryTab({
   comparison,
   previousScores,
   onCategoryClick,
+  allCategoryScores,
+  enabledAnalyzers = [],
+  priorityCategories = [],
 }: SummaryTabProps) {
   const resultConfig = {
     WIN: { icon: Trophy, color: 'text-green-400', bg: 'bg-green-500/10', border: 'border-green-500/30', label: 'Victoire' },
@@ -162,6 +198,45 @@ export function SummaryTab({
     () => generateQuickInsights(categoryScores, previousScores),
     [categoryScores, previousScores]
   );
+
+  // Nombre de catégories activées/désactivées
+  const enabledCount = enabledAnalyzers.filter(id => id.startsWith('analysis.')).length;
+  const disabledCount = CATEGORY_CONFIG.length - enabledCount;
+
+  // Trier les catégories: prioritaires d'abord, puis les autres
+  const orderedCategories = useMemo(() => {
+    if (priorityCategories.length === 0) return CATEGORY_CONFIG;
+    const prioritySet = new Set(priorityCategories);
+    const priorityCats = CATEGORY_CONFIG.filter(c => prioritySet.has(c.key as AnalysisCategory));
+    const otherCats = CATEGORY_CONFIG.filter(c => !prioritySet.has(c.key as AnalysisCategory));
+    return [...priorityCats, ...otherCats];
+  }, [priorityCategories]);
+
+  // Préparer les catégories avec leur état
+  const categoriesWithState = useMemo(() => {
+    return orderedCategories.map(cat => {
+      const isEnabled = enabledAnalyzers.length === 0 || enabledAnalyzers.includes(cat.featureId);
+      return {
+        ...cat,
+        isEnabled,
+        isPriority: priorityCategories.includes(cat.key as AnalysisCategory),
+        // Use enabled score if enabled, otherwise use all scores (for grayed display)
+        score: isEnabled
+          ? categoryScores[cat.key as keyof CategoryScores]
+          : allCategoryScores?.[cat.key as keyof CategoryScores],
+      };
+    });
+  }, [orderedCategories, enabledAnalyzers, priorityCategories, categoryScores, allCategoryScores]);
+
+  // Catégories désactivées pour le radar chart (grisées mais visibles)
+  const disabledCategoriesForRadar = useMemo(() => {
+    if (enabledAnalyzers.length === 0) return []; // Toutes activées si non spécifié
+    const allCategories = CATEGORY_CONFIG.map(c => c.key);
+    const enabledKeys = enabledAnalyzers
+      .filter(id => id.startsWith('analysis.'))
+      .map(id => id.replace('analysis.', ''));
+    return allCategories.filter(cat => !enabledKeys.includes(cat)) as AnalysisCategory[];
+  }, [enabledAnalyzers]);
 
   const priorityAdvice = weaknesses.length > 0
     ? `Focus sur: ${weaknesses[0]}`
@@ -239,7 +314,11 @@ export function SummaryTab({
           <CardContent className="p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-white font-semibold">Profil de compétences</h3>
-              <span className="text-xs text-gray-500">9 catégories v2</span>
+              <span className="text-xs text-gray-500">
+                {disabledCategoriesForRadar.length > 0
+                  ? `${9 - disabledCategoriesForRadar.length} catégories actives`
+                  : '9 catégories'}
+              </span>
             </div>
             <div className="flex justify-center">
               <CategoryRadarChart
@@ -249,6 +328,7 @@ export function SummaryTab({
                 showValues={true}
                 showLegend={false}
                 animated={true}
+                disabledCategories={disabledCategoriesForRadar}
                 onCategoryClick={onCategoryClick}
               />
             </div>
@@ -259,30 +339,63 @@ export function SummaryTab({
       {/* Grid 3x3 des scores par catégorie */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-white font-semibold">Détail par catégorie</h3>
-          <Button variant="ghost" size="sm" className="text-gray-400 hover:text-white gap-1">
-            Personnaliser <ChevronRight className="w-4 h-4" />
-          </Button>
+          <div className="flex items-center gap-3">
+            <h3 className="text-white font-semibold">Détail par catégorie</h3>
+            <InfoTooltip
+              variant="help"
+              size="sm"
+              content={
+                <div className="space-y-2">
+                  <div className="font-medium text-white">Catégories d&apos;analyse</div>
+                  <p className="text-xs text-gray-300">
+                    Les catégories avec <Star className="w-3 h-3 inline text-yellow-400" /> sont vos priorités.
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    Les catégories grisées sont désactivées dans vos paramètres.
+                  </p>
+                  <Link href="/dashboard/settings" className="text-cs2-accent text-xs hover:underline block mt-2">
+                    Personnaliser →
+                  </Link>
+                </div>
+              }
+            />
+          </div>
+          <div className="flex items-center gap-3">
+            {disabledCount > 0 && (
+              <span className="text-xs text-gray-500 flex items-center gap-1">
+                <Lock className="w-3 h-3" />
+                {disabledCount} désactivée{disabledCount > 1 ? 's' : ''}
+              </span>
+            )}
+            <Link href="/dashboard/settings">
+              <Button variant="ghost" size="sm" className="text-gray-400 hover:text-white gap-1">
+                <Settings className="w-4 h-4" />
+                Personnaliser
+              </Button>
+            </Link>
+          </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {CATEGORY_ORDER.map((category) => {
-            const score = categoryScores[category as keyof CategoryScores] || 0;
-            const prevScore = previousScores?.[category as keyof CategoryScores];
-
-            return (
-              <ScoreCard
-                key={category}
-                category={category}
-                score={score}
-                previousScore={prevScore}
-                variant="compact"
-                showTrend={prevScore !== undefined}
-                interactive={true}
-                animate={true}
-                onClick={() => onCategoryClick?.(category)}
+          {categoriesWithState.map((cat) => (
+            <div key={cat.key} className="relative">
+              {cat.isPriority && (
+                <Star className="absolute -top-1 -right-1 w-4 h-4 text-yellow-400 fill-yellow-400 z-10" />
+              )}
+              <CategoryScoreCard
+                category={cat.key as AnalysisCategory}
+                label={cat.label}
+                score={cat.isEnabled ? cat.score : undefined}
+                icon={cat.icon}
+                iconColor={cat.color}
+                iconBgColor={cat.bgColor}
+                isEnabled={cat.isEnabled}
+                disabledReason="disabled_by_user"
+                showWeightInfo={false}
+                size="md"
+                onClick={cat.isEnabled ? () => onCategoryClick?.(cat.key as AnalysisCategory) : undefined}
               />
-            );
-          })}
+            </div>
+          ))}
         </div>
       </div>
 

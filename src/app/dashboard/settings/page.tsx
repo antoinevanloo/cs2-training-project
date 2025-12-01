@@ -10,6 +10,7 @@ import { DisplaySettings } from './DisplaySettings';
 import { AnalysisSettings } from './AnalysisSettings';
 import { GoalsSettings } from './GoalsSettings';
 import { FeaturesSettings } from './FeaturesSettings';
+import { AdvancedSettings } from './AdvancedSettings';
 import { PreferencesProvider } from '@/lib/preferences/context';
 import {
   User,
@@ -21,6 +22,7 @@ import {
   Gamepad2,
   HardDrive,
   Zap,
+  Wrench,
 } from 'lucide-react';
 
 const maps = [
@@ -100,7 +102,7 @@ export default function SettingsPage() {
   const [isAdmin, setIsAdmin] = useState(false);
 
   // Tab state
-  type SettingsTab = 'profile' | 'display' | 'analysis' | 'goals' | 'features';
+  type SettingsTab = 'profile' | 'display' | 'analysis' | 'goals' | 'features' | 'advanced';
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
 
   const tabs: { id: SettingsTab; label: string; icon: typeof User }[] = [
@@ -109,6 +111,7 @@ export default function SettingsPage() {
     { id: 'analysis', label: 'Analyse', icon: Sliders },
     { id: 'goals', label: 'Objectifs', icon: Target },
     { id: 'features', label: 'Fonctionnalités', icon: Zap },
+    { id: 'advanced', label: 'Avancé', icon: Wrench },
   ];
 
   // Charger les données utilisateur
@@ -347,6 +350,13 @@ export default function SettingsPage() {
         {activeTab === 'features' && (
           <div className="max-w-3xl">
             <FeaturesSettings />
+          </div>
+        )}
+
+        {/* Advanced Settings Tab */}
+        {activeTab === 'advanced' && (
+          <div className="max-w-3xl">
+            <AdvancedSettings isPremium={effectiveTier !== 'FREE'} />
           </div>
         )}
 

@@ -34,6 +34,7 @@ interface ComparisonData {
 interface CategoryRadarChartProps {
   scores: CategoryScores;
   comparison?: ComparisonData[];
+  comparisonScores?: CategoryScores; // Legacy prop for simple comparison
   size?: number;
   showLabels?: boolean;
   showValues?: boolean;
@@ -45,14 +46,31 @@ interface CategoryRadarChartProps {
   playerColor?: string;
   playerLabel?: string;
   className?: string;
+  /** Catégories à afficher (toutes si non spécifié) - FILTER mode */
+  enabledCategories?: AnalysisCategory[];
+  /** Catégories désactivées (grisées mais visibles) - GRAY OUT mode */
+  disabledCategories?: AnalysisCategory[];
   onCategoryClick?: (category: AnalysisCategory) => void;
 }
 
-// Configuration des 9 catégories avec angles uniformes
-const CATEGORY_CONFIG = CATEGORY_ORDER.map((key, index) => ({
+// Configuration par défaut des 9 catégories
+const DEFAULT_CATEGORY_CONFIG = CATEGORY_ORDER.map((key, index) => ({
   key,
   angle: (360 / 9) * index - 90, // Commence en haut (-90°)
 }));
+
+// Helper pour créer une config filtrée avec angles recalculés
+function createFilteredConfig(enabledCategories?: AnalysisCategory[]) {
+  const categories = enabledCategories && enabledCategories.length > 0
+    ? CATEGORY_ORDER.filter(cat => enabledCategories.includes(cat))
+    : CATEGORY_ORDER;
+
+  const count = categories.length;
+  return categories.map((key, index) => ({
+    key,
+    angle: (360 / count) * index - 90, // Angles recalculés selon le nombre de catégories
+  }));
+}
 
 // Helpers géométriques
 function polarToCartesian(
@@ -71,9 +89,10 @@ function polarToCartesian(
 function getPolygonPoints(
   scores: CategoryScores,
   center: number,
-  maxRadius: number
+  maxRadius: number,
+  categoryConfig: { key: string; angle: number }[]
 ): string {
-  return CATEGORY_CONFIG.map((cat) => {
+  return categoryConfig.map((cat) => {
     const score = scores[cat.key as keyof CategoryScores] || 0;
     const radius = (score / 100) * maxRadius;
     const point = polarToCartesian(center, center, radius, cat.angle);
@@ -84,9 +103,10 @@ function getPolygonPoints(
 function getPolygonPath(
   scores: CategoryScores,
   center: number,
-  maxRadius: number
+  maxRadius: number,
+  categoryConfig: { key: string; angle: number }[]
 ): string {
-  const points = CATEGORY_CONFIG.map((cat, index) => {
+  const points = categoryConfig.map((cat, index) => {
     const score = scores[cat.key as keyof CategoryScores] || 0;
     const radius = (score / 100) * maxRadius;
     const point = polarToCartesian(center, center, radius, cat.angle);
@@ -98,6 +118,7 @@ function getPolygonPath(
 export function CategoryRadarChart({
   scores,
   comparison = [],
+  comparisonScores,
   size = 300,
   showLabels = true,
   showValues = true,
@@ -109,6 +130,8 @@ export function CategoryRadarChart({
   playerColor = '#f97316',
   playerLabel = 'Toi',
   className = '',
+  enabledCategories,
+  disabledCategories = [],
   onCategoryClick,
 }: CategoryRadarChartProps) {
   const [hoveredCategory, setHoveredCategory] = useState<AnalysisCategory | null>(null);
@@ -122,6 +145,34 @@ export function CategoryRadarChart({
   const center = size / 2;
   const maxRadius = size / 2 - (showLabels ? 45 : 15);
 
+  // Configuration des catégories (filtrées si enabledCategories est fourni)
+  const categoryConfig = useMemo(
+    () => createFilteredConfig(enabledCategories),
+    [enabledCategories]
+  );
+
+  // Helper pour vérifier si une catégorie est désactivée
+  const isCategoryDisabled = useCallback((categoryKey: string) => {
+    return disabledCategories.includes(categoryKey as AnalysisCategory);
+  }, [disabledCategories]);
+
+  // Gestion du legacy comparisonScores prop
+  const allComparisons = useMemo(() => {
+    if (comparisonScores) {
+      return [
+        ...comparison,
+        {
+          label: 'Comparaison',
+          scores: comparisonScores,
+          color: '#8b5cf6', // purple
+          strokeDasharray: '4 2',
+          fillOpacity: 0.1,
+        },
+      ];
+    }
+    return comparison;
+  }, [comparison, comparisonScores]);
+
   // Cercles de référence (20%, 40%, 60%, 80%, 100%)
   const referenceCircles = useMemo(() => {
     return [0.2, 0.4, 0.6, 0.8, 1].map((percent) => ({
@@ -132,32 +183,32 @@ export function CategoryRadarChart({
 
   // Lignes des axes
   const axisLines = useMemo(() => {
-    return CATEGORY_CONFIG.map((cat) => {
+    return categoryConfig.map((cat) => {
       const point = polarToCartesian(center, center, maxRadius, cat.angle);
       return {
         ...cat,
         x2: point.x,
         y2: point.y,
-        style: CATEGORY_STYLES[cat.key],
+        style: CATEGORY_STYLES[cat.key as AnalysisCategory],
       };
     });
-  }, [center, maxRadius]);
+  }, [center, maxRadius, categoryConfig]);
 
   // Positions des labels
   const labelPositions = useMemo(() => {
-    return CATEGORY_CONFIG.map((cat) => {
+    return categoryConfig.map((cat) => {
       const labelRadius = maxRadius + 30;
       const point = polarToCartesian(center, center, labelRadius, cat.angle);
-      const style = CATEGORY_STYLES[cat.key];
+      const style = CATEGORY_STYLES[cat.key as AnalysisCategory];
       return {
         ...cat,
         x: point.x,
         y: point.y,
-        label: getCategoryLabel(cat.key, language),
+        label: getCategoryLabel(cat.key as AnalysisCategory, language),
         style,
       };
     });
-  }, [center, maxRadius, language]);
+  }, [center, maxRadius, language, categoryConfig]);
 
   // Gestion du hover sur une catégorie
   const handleCategoryHover = useCallback((
@@ -235,28 +286,32 @@ export function CategoryRadarChart({
         ))}
 
         {/* Lignes des axes */}
-        {axisLines.map((axis) => (
-          <line
-            key={axis.key}
-            x1={center}
-            y1={center}
-            x2={axis.x2}
-            y2={axis.y2}
-            stroke={hoveredCategory === axis.key ? axis.style.color : 'currentColor'}
-            strokeOpacity={hoveredCategory === axis.key ? 0.5 : 0.15}
-            strokeWidth={hoveredCategory === axis.key ? 2 : 1}
-            className={cn(
-              'text-gray-400 dark:text-gray-600',
-              animated && 'transition-all duration-200'
-            )}
-          />
-        ))}
+        {axisLines.map((axis) => {
+          const isDisabled = isCategoryDisabled(axis.key);
+          return (
+            <line
+              key={axis.key}
+              x1={center}
+              y1={center}
+              x2={axis.x2}
+              y2={axis.y2}
+              stroke={hoveredCategory === axis.key ? axis.style.color : 'currentColor'}
+              strokeOpacity={isDisabled ? 0.08 : (hoveredCategory === axis.key ? 0.5 : 0.15)}
+              strokeWidth={hoveredCategory === axis.key ? 2 : 1}
+              strokeDasharray={isDisabled ? '4 4' : undefined}
+              className={cn(
+                'text-gray-400 dark:text-gray-600',
+                animated && 'transition-all duration-200'
+              )}
+            />
+          );
+        })}
 
         {/* Polygones de comparaison */}
-        {comparison.map((comp, index) => (
+        {allComparisons.map((comp, index) => (
           <polygon
             key={`comparison-${index}`}
-            points={getPolygonPoints(comp.scores, center, maxRadius)}
+            points={getPolygonPoints(comp.scores, center, maxRadius, categoryConfig)}
             fill={comp.color}
             fillOpacity={comp.fillOpacity ?? 0.1}
             stroke={comp.color}
@@ -268,7 +323,7 @@ export function CategoryRadarChart({
 
         {/* Polygone du joueur */}
         <path
-          d={getPolygonPath(scores, center, maxRadius)}
+          d={getPolygonPath(scores, center, maxRadius, categoryConfig)}
           fill="url(#playerGradient)"
           stroke={playerColor}
           strokeWidth={2.5}
@@ -281,30 +336,32 @@ export function CategoryRadarChart({
         />
 
         {/* Points des scores */}
-        {CATEGORY_CONFIG.map((cat) => {
+        {categoryConfig.map((cat) => {
           const score = scores[cat.key as keyof CategoryScores] || 0;
           const radius = (score / 100) * maxRadius;
           const point = polarToCartesian(center, center, radius, cat.angle);
           const isHovered = hoveredCategory === cat.key;
-          const categoryStyle = CATEGORY_STYLES[cat.key];
+          const isDisabled = isCategoryDisabled(cat.key);
+          const categoryStyle = CATEGORY_STYLES[cat.key as AnalysisCategory];
 
           return (
             <g
               key={cat.key}
-              onMouseEnter={() => handleCategoryHover(cat.key, point)}
+              onMouseEnter={() => !isDisabled && handleCategoryHover(cat.key, point)}
               onMouseLeave={() => handleCategoryHover(null)}
-              onClick={() => handleCategoryClick(cat.key)}
+              onClick={() => !isDisabled && handleCategoryClick(cat.key)}
               className={cn(
-                'cursor-pointer',
+                !isDisabled && 'cursor-pointer',
                 animated && 'transition-transform duration-200'
               )}
               style={{
-                transform: isHovered ? 'scale(1.2)' : 'scale(1)',
+                transform: isHovered && !isDisabled ? 'scale(1.2)' : 'scale(1)',
                 transformOrigin: `${point.x}px ${point.y}px`,
+                opacity: isDisabled ? 0.3 : 1,
               }}
             >
               {/* Outer glow on hover */}
-              {isHovered && showGlow && (
+              {isHovered && showGlow && !isDisabled && (
                 <circle
                   cx={point.x}
                   cy={point.y}
@@ -318,9 +375,9 @@ export function CategoryRadarChart({
               <circle
                 cx={point.x}
                 cy={point.y}
-                r={isHovered ? 7 : 5}
-                fill={isHovered ? categoryStyle.color : playerColor}
-                stroke="white"
+                r={isHovered && !isDisabled ? 7 : 5}
+                fill={isDisabled ? '#6b7280' : (isHovered ? categoryStyle.color : playerColor)}
+                stroke={isDisabled ? '#4b5563' : 'white'}
                 strokeWidth={2}
               />
             </g>
@@ -330,16 +387,18 @@ export function CategoryRadarChart({
         {/* Labels des catégories */}
         {showLabels && labelPositions.map((label) => {
           const isHovered = hoveredCategory === label.key;
+          const isDisabled = isCategoryDisabled(label.key);
           const score = scores[label.key as keyof CategoryScores] || 0;
           const scoreColor = getScoreColor(score);
 
           return (
             <g
               key={label.key}
-              onMouseEnter={() => handleCategoryHover(label.key)}
+              onMouseEnter={() => !isDisabled && handleCategoryHover(label.key)}
               onMouseLeave={() => handleCategoryHover(null)}
-              onClick={() => handleCategoryClick(label.key)}
-              className="cursor-pointer"
+              onClick={() => !isDisabled && handleCategoryClick(label.key)}
+              className={cn(!isDisabled && 'cursor-pointer')}
+              style={{ opacity: isDisabled ? 0.35 : 1 }}
             >
               {/* Label text */}
               <text
@@ -350,10 +409,10 @@ export function CategoryRadarChart({
                 className={cn(
                   'text-[11px] font-medium',
                   animated && 'transition-all duration-200',
-                  isHovered ? 'opacity-100' : 'opacity-80'
+                  isHovered && !isDisabled ? 'opacity-100' : 'opacity-80'
                 )}
-                fill={isHovered ? label.style.color : 'currentColor'}
-                style={{ fill: isHovered ? label.style.color : undefined }}
+                fill={isDisabled ? '#6b7280' : (isHovered ? label.style.color : 'currentColor')}
+                style={{ fill: isDisabled ? '#6b7280' : (isHovered ? label.style.color : undefined) }}
               >
                 {label.label}
               </text>
@@ -369,9 +428,9 @@ export function CategoryRadarChart({
                     'text-[10px] font-bold',
                     animated && 'transition-all duration-200'
                   )}
-                  fill={isHovered ? label.style.color : scoreColor}
+                  fill={isDisabled ? '#4b5563' : (isHovered ? label.style.color : scoreColor)}
                 >
-                  {score.toFixed(0)}
+                  {isDisabled ? '-' : score.toFixed(0)}
                 </text>
               )}
             </g>
@@ -424,7 +483,7 @@ export function CategoryRadarChart({
             />
             <span className="text-gray-400 dark:text-gray-500">{playerLabel}</span>
           </div>
-          {comparison.map((comp, index) => (
+          {allComparisons.map((comp, index) => (
             <div key={index} className="flex items-center gap-2">
               <div
                 className="w-4 h-0.5"

@@ -3,6 +3,8 @@ import { getUserStats, getRatingProgression } from '@/lib/db/queries/stats';
 import { getRecentDemos } from '@/lib/db/queries/demos';
 import { prisma } from '@/lib/db/prisma';
 import { OverviewClient } from './OverviewClient';
+import { getServerEnabledAnalysisFeatures } from '@/lib/features/server';
+import { DEFAULT_CATEGORY_WEIGHTS, type CategoryWeights } from '@/lib/preferences';
 
 export const metadata = {
   title: 'Vue d\'ensemble | CS2 Coach',
@@ -11,13 +13,30 @@ export const metadata = {
 export default async function OverviewPage() {
   const user = await requireAuth();
 
-  const [stats, recentDemos, ratingHistory, analysisStats] = await Promise.all([
+  // Charger les features activées et les préférences en parallèle
+  const [stats, recentDemos, ratingHistory, analysisStats, enabledAnalyzers, userPreferences] = await Promise.all([
     getUserStats(user.id),
     getRecentDemos(user.id, 5),
     getRatingProgression(user.id),
-    // Récupérer les données d'analyse agrégées
+    // Récupérer les données d'analyse agrégées (9 catégories)
     getAnalysisStats(user.id),
+    // Récupérer les analyseurs activés pour l'utilisateur
+    getServerEnabledAnalysisFeatures(user.id),
+    // Récupérer les préférences utilisateur pour les poids et priorités
+    prisma.userPreferences.findUnique({
+      where: { userId: user.id },
+      select: { categoryWeights: true, priorityCategories: true },
+    }),
   ]);
+
+  // Récupérer les poids des catégories (défaut ou personnalisés)
+  // Le type JSON de Prisma nécessite une conversion explicite
+  const categoryWeights: CategoryWeights = userPreferences?.categoryWeights
+    ? (userPreferences.categoryWeights as unknown as CategoryWeights)
+    : DEFAULT_CATEGORY_WEIGHTS;
+
+  // Récupérer les catégories prioritaires
+  const priorityCategories = (userPreferences?.priorityCategories as string[] | null) ?? [];
 
   // Calculer les faiblesses récurrentes
   const recurringWeaknesses = await getRecurringWeaknesses(user.id);
@@ -52,12 +71,15 @@ export default async function OverviewPage() {
         analysisStats={analysisStats}
         recurringWeaknesses={recurringWeaknesses}
         userName={user.name || 'Joueur'}
+        enabledAnalyzers={enabledAnalyzers}
+        categoryWeights={categoryWeights}
+        priorityCategories={priorityCategories}
       />
     </div>
   );
 }
 
-// Helper: Récupérer les stats d'analyse agrégées
+// Helper: Récupérer les stats d'analyse agrégées (9 catégories v2)
 async function getAnalysisStats(userId: string) {
   const analyses = await prisma.analysis.findMany({
     where: {
@@ -74,6 +96,9 @@ async function getAnalysisStats(userId: string) {
       economyScore: true,
       timingScore: true,
       decisionScore: true,
+      movementScore: true,
+      awarenessScore: true,
+      teamplayScore: true,
     },
   });
 
@@ -82,6 +107,13 @@ async function getAnalysisStats(userId: string) {
   }
 
   const count = analyses.length;
+
+  // Helper pour calculer la moyenne en gérant les valeurs nulles
+  const avg = (getter: (a: typeof analyses[0]) => number | null) => {
+    const validValues = analyses.map(getter).filter((v): v is number => v !== null);
+    return validValues.length > 0 ? validValues.reduce((sum, v) => sum + v, 0) / validValues.length : 0;
+  };
+
   return {
     count,
     avgOverall: analyses.reduce((sum, a) => sum + a.overallScore, 0) / count,
@@ -91,6 +123,10 @@ async function getAnalysisStats(userId: string) {
     avgEconomy: analyses.reduce((sum, a) => sum + a.economyScore, 0) / count,
     avgTiming: analyses.reduce((sum, a) => sum + a.timingScore, 0) / count,
     avgDecision: analyses.reduce((sum, a) => sum + a.decisionScore, 0) / count,
+    // Nouvelles catégories v2 (peuvent être null pour anciennes analyses)
+    avgMovement: avg((a) => a.movementScore),
+    avgAwareness: avg((a) => a.awarenessScore),
+    avgTeamplay: avg((a) => a.teamplayScore),
   };
 }
 

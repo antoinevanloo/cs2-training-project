@@ -1,27 +1,32 @@
 'use client';
 
+import { useMemo } from 'react';
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
-import { Progress } from '@/components/ui/Progress';
 import { GranularityBadge } from '@/components/ui/GranularityBadge';
 import { MetricDisplay } from '@/components/ui/MetricDisplay';
+import { CategoryScoreCard } from '@/components/ui/CategoryScoreCard';
+import { InfoTooltip } from '@/components/ui/InfoTooltip';
+import { getAdjustedWeights, convertUserWeightsToFeatureWeights } from '@/lib/features/score-calculator';
 import {
   ChevronLeft,
   ChevronRight,
-  Target,
   Crosshair,
   MapPin,
   Bomb,
   DollarSign,
   Clock,
   Brain,
-  TrendingUp,
-  TrendingDown,
   AlertTriangle,
   CheckCircle,
-  ArrowUpRight,
-  ArrowDownRight,
+  Move,
+  Eye,
+  Users,
+  Lock,
+  Settings,
+  Star,
 } from 'lucide-react';
+import type { CategoryWeights, AnalysisCategory } from '@/lib/preferences/types';
 
 interface MapDetailClientProps {
   mapName: string;
@@ -56,6 +61,9 @@ interface MapDetailClientProps {
       avgEconomy: number;
       avgTiming: number;
       avgDecision: number;
+      avgMovement: number;
+      avgAwareness: number;
+      avgTeamplay: number;
     } | null;
     recurringWeaknesses: Array<{ name: string; count: number; percentage: number }>;
     recurringStrengths: Array<{ name: string; count: number; percentage: number }>;
@@ -67,27 +75,82 @@ interface MapDetailClientProps {
       winRate: number;
     } | null;
   };
+  /** IDs des analyseurs activés (ex: ['analysis.aim', 'analysis.positioning']) */
+  enabledAnalyzers: string[];
+  /** Poids personnalisés des catégories */
+  categoryWeights?: CategoryWeights;
+  /** Catégories prioritaires (affichées en premier avec étoile) */
+  priorityCategories: AnalysisCategory[];
 }
 
+// Configuration des 9 catégories v2
 const CATEGORY_CONFIG = [
-  { key: 'avgAim', label: 'Aim', icon: Crosshair, color: 'text-red-400', bgColor: 'bg-red-500/20' },
-  { key: 'avgPositioning', label: 'Position', icon: MapPin, color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
-  { key: 'avgUtility', label: 'Utility', icon: Bomb, color: 'text-green-400', bgColor: 'bg-green-500/20' },
-  { key: 'avgEconomy', label: 'Economy', icon: DollarSign, color: 'text-yellow-400', bgColor: 'bg-yellow-500/20' },
-  { key: 'avgTiming', label: 'Timing', icon: Clock, color: 'text-purple-400', bgColor: 'bg-purple-500/20' },
-  { key: 'avgDecision', label: 'Decision', icon: Brain, color: 'text-orange-400', bgColor: 'bg-orange-500/20' },
+  { key: 'aim', featureId: 'analysis.aim', scoreKey: 'avgAim', label: 'Aim', icon: Crosshair, color: 'text-red-400', bgColor: 'bg-red-500/20' },
+  { key: 'positioning', featureId: 'analysis.positioning', scoreKey: 'avgPositioning', label: 'Position', icon: MapPin, color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
+  { key: 'utility', featureId: 'analysis.utility', scoreKey: 'avgUtility', label: 'Utility', icon: Bomb, color: 'text-green-400', bgColor: 'bg-green-500/20' },
+  { key: 'economy', featureId: 'analysis.economy', scoreKey: 'avgEconomy', label: 'Economy', icon: DollarSign, color: 'text-yellow-400', bgColor: 'bg-yellow-500/20' },
+  { key: 'timing', featureId: 'analysis.timing', scoreKey: 'avgTiming', label: 'Timing', icon: Clock, color: 'text-purple-400', bgColor: 'bg-purple-500/20' },
+  { key: 'decision', featureId: 'analysis.decision', scoreKey: 'avgDecision', label: 'Decision', icon: Brain, color: 'text-orange-400', bgColor: 'bg-orange-500/20' },
+  { key: 'movement', featureId: 'analysis.movement', scoreKey: 'avgMovement', label: 'Movement', icon: Move, color: 'text-cyan-400', bgColor: 'bg-cyan-500/20' },
+  { key: 'awareness', featureId: 'analysis.awareness', scoreKey: 'avgAwareness', label: 'Awareness', icon: Eye, color: 'text-pink-400', bgColor: 'bg-pink-500/20' },
+  { key: 'teamplay', featureId: 'analysis.teamplay', scoreKey: 'avgTeamplay', label: 'Teamplay', icon: Users, color: 'text-emerald-400', bgColor: 'bg-emerald-500/20' },
 ];
 
-export function MapDetailClient({ mapName, data }: MapDetailClientProps) {
+export function MapDetailClient({
+  mapName,
+  data,
+  enabledAnalyzers,
+  categoryWeights,
+  priorityCategories,
+}: MapDetailClientProps) {
   const { demos, stats, analysisScores, recurringWeaknesses, recurringStrengths, globalStats } = data;
 
   // Comparaison avec stats globales
-  const comparison = globalStats ? {
+  const _comparison = globalStats ? {
     rating: stats.avgRating - globalStats.avgRating,
     adr: stats.avgAdr - globalStats.avgAdr,
     hsPercent: stats.avgHsPercent - globalStats.avgHsPercent,
     winRate: stats.winRate - (globalStats.winRate * 100),
   } : null;
+
+  // Calculer les poids ajustés
+  const customWeights = useMemo(() => {
+    return categoryWeights ? convertUserWeightsToFeatureWeights(categoryWeights) : {};
+  }, [categoryWeights]);
+
+  const adjustedWeights = useMemo(() => {
+    return getAdjustedWeights(enabledAnalyzers, customWeights);
+  }, [enabledAnalyzers, customWeights]);
+
+  // Nombre de catégories activées/désactivées
+  const enabledCount = enabledAnalyzers.filter(id => id.startsWith('analysis.')).length;
+  const disabledCount = CATEGORY_CONFIG.length - enabledCount;
+
+  // Trier les catégories: prioritaires d'abord, puis les autres
+  const orderedCategories = useMemo(() => {
+    if (priorityCategories.length === 0) return CATEGORY_CONFIG;
+    const prioritySet = new Set(priorityCategories);
+    const priorityCats = CATEGORY_CONFIG.filter(c => prioritySet.has(c.key as AnalysisCategory));
+    const otherCats = CATEGORY_CONFIG.filter(c => !prioritySet.has(c.key as AnalysisCategory));
+    return [...priorityCats, ...otherCats];
+  }, [priorityCategories]);
+
+  // Préparer les catégories avec leur état
+  const categoriesWithState = useMemo(() => {
+    return orderedCategories.map(cat => ({
+      ...cat,
+      isEnabled: enabledAnalyzers.includes(cat.featureId),
+      isPriority: priorityCategories.includes(cat.key as AnalysisCategory),
+      originalWeight: customWeights[cat.featureId] ?? 11.11,
+      adjustedWeight: adjustedWeights[cat.featureId],
+    }));
+  }, [orderedCategories, enabledAnalyzers, priorityCategories, customWeights, adjustedWeights]);
+
+  // Récupérer le score pour une catégorie
+  const getScore = (scoreKey: string): number | undefined => {
+    if (!analysisScores) return undefined;
+    return analysisScores[scoreKey as keyof typeof analysisScores] as number | undefined;
+  };
 
   return (
     <div className="space-y-6 pb-20 lg:pb-0">
@@ -189,44 +252,80 @@ export function MapDetailClient({ mapName, data }: MapDetailClientProps) {
 
       {/* Grille principale */}
       <div className="grid lg:grid-cols-3 gap-6">
-        {/* 6 Catégories */}
+        {/* 9 Catégories v2 */}
         <Card className="lg:col-span-2 border-gray-800/50 bg-gradient-to-br from-gray-900/50 to-gray-800/30">
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <div className="flex items-center gap-3">
               <CardTitle>Scores d&apos;analyse sur {mapName}</CardTitle>
               <GranularityBadge level="map" />
+              <InfoTooltip
+                variant="help"
+                size="sm"
+                content={
+                  <div className="space-y-2">
+                    <div className="font-medium text-white">Système de poids</div>
+                    <p className="text-xs text-gray-300">
+                      Les catégories avec une <Star className="w-3 h-3 inline text-yellow-400" /> sont vos priorités.
+                      Elles s&apos;affichent en premier.
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      Les catégories grisées sont désactivées. Leur poids est redistribué aux autres.
+                    </p>
+                    <Link
+                      href="/dashboard/settings"
+                      className="text-cs2-accent text-xs hover:underline block mt-2"
+                    >
+                      Personnaliser →
+                    </Link>
+                  </div>
+                }
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              {disabledCount > 0 && (
+                <span className="text-xs text-gray-500 flex items-center gap-1">
+                  <Lock className="w-3 h-3" />
+                  {disabledCount} désactivée{disabledCount > 1 ? 's' : ''}
+                </span>
+              )}
             </div>
           </CardHeader>
           <CardContent>
             {analysisScores ? (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                {CATEGORY_CONFIG.map((cat) => {
-                  const Icon = cat.icon;
-                  const score = analysisScores[cat.key as keyof typeof analysisScores];
-                  // Convert avgAim -> aimScore, etc.
-                  const metricId = cat.key.replace('avg', '').toLowerCase() + 'Score';
-                  return (
-                    <div
-                      key={cat.key}
-                      className="p-4 rounded-lg bg-gray-900/50 border border-gray-800/50"
-                    >
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className={`p-1.5 rounded ${cat.bgColor}`}>
-                          <Icon className={`w-4 h-4 ${cat.color}`} />
-                        </div>
-                        <span className="text-sm font-medium text-gray-300">{cat.label}</span>
-                      </div>
-                      <MetricDisplay
-                        metricId={metricId}
-                        value={score}
-                        granularity="map"
-                        showGranularity={false}
-                        size="md"
-                      />
-                      <Progress value={score} color="score" size="sm" className="mt-2" />
-                    </div>
-                  );
-                })}
+                {categoriesWithState.map((cat) => (
+                  <div key={cat.key} className="relative">
+                    {cat.isPriority && (
+                      <Star className="absolute -top-1 -right-1 w-4 h-4 text-yellow-400 fill-yellow-400 z-10" />
+                    )}
+                    <CategoryScoreCard
+                      category={cat.key as AnalysisCategory}
+                      label={cat.label}
+                      score={cat.isEnabled ? getScore(cat.scoreKey) : undefined}
+                      icon={cat.icon}
+                      iconColor={cat.color}
+                      iconBgColor={cat.bgColor}
+                      isEnabled={cat.isEnabled}
+                      disabledReason="disabled_by_user"
+                      originalWeight={cat.originalWeight}
+                      adjustedWeight={cat.adjustedWeight}
+                      showWeightInfo={true}
+                      size="md"
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : enabledCount === 0 ? (
+              <div className="text-center py-8 text-gray-400">
+                <Lock className="w-8 h-8 mx-auto mb-3 text-gray-600" />
+                <p>Toutes les catégories sont désactivées.</p>
+                <Link
+                  href="/dashboard/settings"
+                  className="text-cs2-accent hover:underline text-sm mt-2 inline-flex items-center gap-1"
+                >
+                  <Settings className="w-4 h-4" />
+                  Configurer les analyseurs
+                </Link>
               </div>
             ) : (
               <div className="text-center py-8 text-gray-400">

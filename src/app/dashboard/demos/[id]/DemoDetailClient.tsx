@@ -101,6 +101,7 @@ interface FeatureData {
   preferences: UserFeaturePreferences;
   overrides: UserFeatureOverride[];
   enabledAnalyzers: string[];
+  priorityCategories: string[];
 }
 
 interface DemoDetailClientProps {
@@ -156,6 +157,19 @@ export function DemoDetailClient({ demo, globalStats, featureData, chartData }: 
   ];
 
   const mainPlayerStats = demo.playerStats.find((p) => p.isMainPlayer);
+
+  // All scores (for displaying grayed out disabled categories)
+  const allCategoryScores = demo.analysis ? {
+    aim: demo.analysis.aimScore,
+    positioning: demo.analysis.positioningScore,
+    utility: demo.analysis.utilityScore,
+    economy: demo.analysis.economyScore,
+    timing: demo.analysis.timingScore,
+    decision: demo.analysis.decisionScore,
+    movement: demo.analysis.movementScore ?? undefined,
+    awareness: demo.analysis.awarenessScore ?? undefined,
+    teamplay: demo.analysis.teamplayScore ?? undefined,
+  } : null;
 
   // Only include scores for enabled analyzers (v1 + v2 categories)
   const categoryScores = demo.analysis ? {
@@ -261,6 +275,7 @@ export function DemoDetailClient({ demo, globalStats, featureData, chartData }: 
               <SummaryTab
                 overallScore={demo.analysis.overallScore}
                 categoryScores={categoryScores}
+                allCategoryScores={allCategoryScores || undefined}
                 strengths={demo.analysis.strengths}
                 weaknesses={demo.analysis.weaknesses}
                 playerStats={mainPlayerStats || null}
@@ -268,6 +283,8 @@ export function DemoDetailClient({ demo, globalStats, featureData, chartData }: 
                 onViewCoaching={() => setActiveTab('coaching')}
                 onViewPlan={() => setActiveTab('plan')}
                 comparison={comparison}
+                enabledAnalyzers={featureData.enabledAnalyzers}
+                priorityCategories={featureData.priorityCategories as import('@/lib/preferences/types').AnalysisCategory[]}
               />
             )}
 
@@ -288,6 +305,7 @@ export function DemoDetailClient({ demo, globalStats, featureData, chartData }: 
                 }}
                 playerStats={mainPlayerStats || null}
                 chartData={chartData || undefined}
+                enabledAnalyzers={featureData.enabledAnalyzers}
               />
             )}
 

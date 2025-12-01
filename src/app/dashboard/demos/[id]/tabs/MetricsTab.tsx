@@ -14,6 +14,7 @@ import {
   Footprints,
   Eye,
   Users,
+  Lock,
   type LucideIcon,
 } from 'lucide-react';
 import type { AnalysisCategory } from '@/lib/preferences/types';
@@ -80,6 +81,8 @@ interface MetricsTabProps {
   analyses: Partial<AnalysisData>;
   playerStats: PlayerStats | null;
   chartData?: ChartData;
+  /** IDs des analyseurs activés (ex: ['analysis.aim', 'analysis.positioning']) */
+  enabledAnalyzers?: string[];
 }
 
 // Icons mapping
@@ -216,7 +219,7 @@ function extractMetricValue(analysis: unknown, key: string): unknown {
   return null;
 }
 
-export function MetricsTab({ categoryScores, analyses, playerStats, chartData }: MetricsTabProps) {
+export function MetricsTab({ categoryScores, analyses, playerStats, chartData, enabledAnalyzers = [] }: MetricsTabProps) {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
 
   // Check if chart data is available
@@ -224,7 +227,22 @@ export function MetricsTab({ categoryScores, analyses, playerStats, chartData }:
   const hasTradeChart = chartData?.trades && chartData.kills && chartData.playerSteamId !== undefined;
   const hasMovementChart = chartData?.shots && chartData.shots.length > 0 && chartData.mapName;
 
+  // Helper pour vérifier si une catégorie est désactivée
+  const isCategoryDisabled = (category: AnalysisCategory) => {
+    if (enabledAnalyzers.length === 0) return false; // Si pas de liste, tout est activé
+    return !enabledAnalyzers.includes(`analysis.${category}`);
+  };
+
+  // Nombre de catégories désactivées
+  const disabledCount = useMemo(() => {
+    if (enabledAnalyzers.length === 0) return 0;
+    return CATEGORY_ORDER.filter(cat => isCategoryDisabled(cat)).length;
+  }, [enabledAnalyzers]);
+
   const toggleCategory = (category: string) => {
+    // Ne pas permettre d'expand une catégorie désactivée
+    if (isCategoryDisabled(category as AnalysisCategory)) return;
+
     setExpandedCategories((prev) => {
       const next = new Set(prev);
       if (next.has(category)) {
@@ -236,16 +254,15 @@ export function MetricsTab({ categoryScores, analyses, playerStats, chartData }:
     });
   };
 
-  // Catégories triées par score (du plus bas au plus haut)
-  const sortedCategories = useMemo(() => {
-    return CATEGORY_ORDER
-      .map((cat) => ({
-        category: cat,
-        score: categoryScores[cat as keyof CategoryScores],
-        analysis: analyses[cat as keyof AnalysisData],
-      }))
-      .filter((item) => item.score !== undefined && item.score !== null);
-  }, [categoryScores, analyses]);
+  // Toutes les catégories (activées et désactivées)
+  const allCategories = useMemo(() => {
+    return CATEGORY_ORDER.map((cat) => ({
+      category: cat,
+      score: categoryScores[cat as keyof CategoryScores],
+      analysis: analyses[cat as keyof AnalysisData],
+      isDisabled: isCategoryDisabled(cat),
+    }));
+  }, [categoryScores, analyses, enabledAnalyzers]);
 
   return (
     <div className="space-y-6">
@@ -292,16 +309,25 @@ export function MetricsTab({ categoryScores, analyses, playerStats, chartData }:
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-white font-semibold">Analyse par catégorie (v2)</h3>
-          <span className="text-xs text-gray-500">9 catégories</span>
+          <div className="flex items-center gap-3">
+            {disabledCount > 0 && (
+              <span className="text-xs text-gray-500 flex items-center gap-1">
+                <Lock className="w-3 h-3" />
+                {disabledCount} désactivée{disabledCount > 1 ? 's' : ''}
+              </span>
+            )}
+            <span className="text-xs text-gray-500">9 catégories</span>
+          </div>
         </div>
 
-        {sortedCategories.map(({ category, score, analysis }) => {
-          if (score === undefined || score === null) return null;
+        {allCategories.map(({ category, score, analysis, isDisabled }) => {
+          // Skip si pas de score ET pas désactivé
+          if ((score === undefined || score === null) && !isDisabled) return null;
 
           const style = CATEGORY_STYLES[category];
           const Icon = CATEGORY_ICONS[category];
-          const isExpanded = expandedCategories.has(category);
-          const scoreLevel = getScoreLevel(score);
+          const isExpanded = expandedCategories.has(category) && !isDisabled;
+          const scoreLevel = score !== undefined && score !== null ? getScoreLevel(score) : null;
           const metrics = METRICS_CONFIG[category];
 
           return (
@@ -309,18 +335,22 @@ export function MetricsTab({ categoryScores, analyses, playerStats, chartData }:
               key={category}
               className={cn(
                 'border transition-all duration-300',
-                isExpanded ? 'ring-1' : ''
+                isExpanded ? 'ring-1' : '',
+                isDisabled && 'opacity-50'
               )}
               style={{
-                borderColor: `${style.color}30`,
-                backgroundColor: `${style.color}08`,
-                ...(isExpanded && { ringColor: `${style.color}50` }),
+                borderColor: isDisabled ? '#374151' : `${style.color}30`,
+                backgroundColor: isDisabled ? '#1f293710' : `${style.color}08`,
+                ...(isExpanded && !isDisabled && { ringColor: `${style.color}50` }),
               }}
             >
               <CardContent className="p-0">
                 {/* Header - toujours visible */}
                 <div
-                  className="p-4 cursor-pointer hover:bg-white/5 transition-colors"
+                  className={cn(
+                    'p-4 transition-colors',
+                    !isDisabled && 'cursor-pointer hover:bg-white/5'
+                  )}
                   onClick={() => toggleCategory(category)}
                 >
                   <div className="flex items-center justify-between">
@@ -329,36 +359,51 @@ export function MetricsTab({ categoryScores, analyses, playerStats, chartData }:
                       <div
                         className="p-2.5 rounded-xl"
                         style={{
-                          backgroundColor: `${style.color}20`,
+                          backgroundColor: isDisabled ? '#374151' : `${style.color}20`,
                         }}
                       >
-                        <Icon className="w-5 h-5" style={{ color: style.color }} />
+                        {isDisabled ? (
+                          <Lock className="w-5 h-5 text-gray-500" />
+                        ) : (
+                          <Icon className="w-5 h-5" style={{ color: style.color }} />
+                        )}
                       </div>
                       {/* Label & description */}
                       <div>
-                        <h4 className="text-white font-semibold">{style.label}</h4>
-                        <p className="text-xs text-gray-400">{style.description}</p>
+                        <h4 className={cn('font-semibold', isDisabled ? 'text-gray-500' : 'text-white')}>
+                          {style.label}
+                        </h4>
+                        <p className="text-xs text-gray-500">
+                          {isDisabled ? 'Catégorie désactivée' : style.description}
+                        </p>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-4">
                       {/* Score */}
-                      <div className="text-right">
-                        <div
-                          className="text-2xl font-bold tabular-nums"
-                          style={{ color: scoreLevel.color }}
-                        >
-                          {Math.round(score)}
+                      {isDisabled ? (
+                        <div className="text-right">
+                          <div className="text-2xl font-bold text-gray-600">-</div>
+                          <div className="text-xs font-medium text-gray-600">Désactivé</div>
                         </div>
-                        <div
-                          className="text-xs font-medium"
-                          style={{ color: scoreLevel.color }}
-                        >
-                          {scoreLevel.label}
+                      ) : scoreLevel ? (
+                        <div className="text-right">
+                          <div
+                            className="text-2xl font-bold tabular-nums"
+                            style={{ color: scoreLevel.color }}
+                          >
+                            {Math.round(score!)}
+                          </div>
+                          <div
+                            className="text-xs font-medium"
+                            style={{ color: scoreLevel.color }}
+                          >
+                            {scoreLevel.label}
+                          </div>
                         </div>
-                      </div>
+                      ) : null}
                       {/* Expand icon */}
-                      {analysis !== null && analysis !== undefined && (
+                      {!isDisabled && analysis !== null && analysis !== undefined && (
                         <div
                           className={cn(
                             'p-1 rounded transition-transform duration-200',
@@ -376,8 +421,8 @@ export function MetricsTab({ categoryScores, analyses, playerStats, chartData }:
                     <div
                       className="h-full rounded-full transition-all duration-500"
                       style={{
-                        width: `${score}%`,
-                        backgroundColor: style.color,
+                        width: isDisabled ? '0%' : `${score || 0}%`,
+                        backgroundColor: isDisabled ? '#4b5563' : style.color,
                       }}
                     />
                   </div>

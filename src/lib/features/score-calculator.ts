@@ -18,12 +18,56 @@ interface AnalysisScores {
   economyScore?: number;
   timingScore?: number;
   decisionScore?: number;
+  movementScore?: number;
+  awarenessScore?: number;
+  teamplayScore?: number;
   overallScore?: number;
 }
 
 interface ScoreCalculatorOptions {
   /** Liste des IDs de features d'analyse activées */
   enabledAnalyzers: string[];
+  /** Poids personnalisés de l'utilisateur (optionnel) */
+  customWeights?: Record<string, number>;
+}
+
+// Type pour les poids de catégorie utilisateur
+export type CategoryWeights = {
+  aim: number;
+  positioning: number;
+  utility: number;
+  economy: number;
+  timing: number;
+  decision: number;
+  movement: number;
+  awareness: number;
+  teamplay: number;
+};
+
+// Mapping de category vers featureId
+const CATEGORY_TO_FEATURE: Record<keyof CategoryWeights, string> = {
+  aim: 'analysis.aim',
+  positioning: 'analysis.positioning',
+  utility: 'analysis.utility',
+  economy: 'analysis.economy',
+  timing: 'analysis.timing',
+  decision: 'analysis.decision',
+  movement: 'analysis.movement',
+  awareness: 'analysis.awareness',
+  teamplay: 'analysis.teamplay',
+};
+
+/**
+ * Convertit les poids utilisateur (par catégorie) en poids par featureId
+ */
+export function convertUserWeightsToFeatureWeights(
+  categoryWeights: CategoryWeights
+): Record<string, number> {
+  const result: Record<string, number> = {};
+  for (const [category, featureId] of Object.entries(CATEGORY_TO_FEATURE)) {
+    result[featureId] = categoryWeights[category as keyof CategoryWeights] / 100;
+  }
+  return result;
 }
 
 // ============================================
@@ -37,6 +81,9 @@ const FEATURE_TO_SCORE_KEY: Record<string, keyof AnalysisScores> = {
   'analysis.economy': 'economyScore',
   'analysis.timing': 'timingScore',
   'analysis.decision': 'decisionScore',
+  'analysis.movement': 'movementScore',
+  'analysis.awareness': 'awarenessScore',
+  'analysis.teamplay': 'teamplayScore',
 };
 
 // ============================================
@@ -46,32 +93,43 @@ const FEATURE_TO_SCORE_KEY: Record<string, keyof AnalysisScores> = {
 /**
  * Calcule les poids ajustés en fonction des analyseurs activés
  * Les poids des analyseurs désactivés sont redistribués aux autres
+ * Supporte les poids personnalisés de l'utilisateur
  */
 export function getAdjustedWeights(
-  enabledAnalyzers: string[]
+  enabledAnalyzers: string[],
+  customWeights?: Record<string, number>
 ): Record<string, number> {
   if (enabledAnalyzers.length === 0) {
     return {};
   }
 
+  // Utiliser les poids personnalisés si fournis, sinon les poids par défaut
+  const baseWeights = customWeights || ANALYSIS_WEIGHTS;
+
   // Calcul du poids total des analyseurs désactivés
   let disabledWeight = 0;
-  for (const [featureId, weight] of Object.entries(ANALYSIS_WEIGHTS)) {
+  let enabledTotalWeight = 0;
+
+  for (const [featureId, weight] of Object.entries(baseWeights)) {
     if (!enabledAnalyzers.includes(featureId)) {
       disabledWeight += weight;
+    } else {
+      enabledTotalWeight += weight;
     }
   }
 
   // Redistribution proportionnelle
   const adjustedWeights: Record<string, number> = {};
-  const enabledCount = enabledAnalyzers.length;
 
-  if (enabledCount > 0) {
-    const redistribution = disabledWeight / enabledCount;
-
+  if (enabledTotalWeight > 0) {
+    // Redistribuer le poids des désactivés proportionnellement aux poids des activés
     for (const featureId of enabledAnalyzers) {
-      if (ANALYSIS_WEIGHTS[featureId] !== undefined) {
-        adjustedWeights[featureId] = ANALYSIS_WEIGHTS[featureId] + redistribution;
+      const originalWeight = baseWeights[featureId];
+      if (originalWeight !== undefined) {
+        // Redistribution proportionnelle au poids original
+        const proportion = originalWeight / enabledTotalWeight;
+        const additionalWeight = disabledWeight * proportion;
+        adjustedWeights[featureId] = originalWeight + additionalWeight;
       }
     }
   }
@@ -85,18 +143,19 @@ export function getAdjustedWeights(
 
 /**
  * Calcule le score global en tenant compte des analyseurs activés
+ * et des poids personnalisés de l'utilisateur
  */
 export function calculateOverallScore(
   scores: AnalysisScores,
   options: ScoreCalculatorOptions
 ): number {
-  const { enabledAnalyzers } = options;
+  const { enabledAnalyzers, customWeights } = options;
 
   if (enabledAnalyzers.length === 0) {
     return 0;
   }
 
-  const adjustedWeights = getAdjustedWeights(enabledAnalyzers);
+  const adjustedWeights = getAdjustedWeights(enabledAnalyzers, customWeights);
 
   let totalScore = 0;
   let totalWeight = 0;
@@ -118,10 +177,12 @@ export function calculateOverallScore(
 
 /**
  * Recalcule tous les scores d'une analyse en fonction des features
+ * et des poids personnalisés de l'utilisateur
  */
 export function recalculateAnalysisScores(
   originalScores: AnalysisScores,
-  enabledAnalyzers: string[]
+  enabledAnalyzers: string[],
+  customWeights?: Record<string, number>
 ): AnalysisScores {
   const result: AnalysisScores = {};
 
@@ -133,8 +194,11 @@ export function recalculateAnalysisScores(
     }
   }
 
-  // Recalculer le score global
-  result.overallScore = calculateOverallScore(originalScores, { enabledAnalyzers });
+  // Recalculer le score global avec les poids personnalisés
+  result.overallScore = calculateOverallScore(originalScores, {
+    enabledAnalyzers,
+    customWeights,
+  });
 
   return result;
 }
@@ -182,6 +246,9 @@ export function getWeightsSummary(enabledAnalyzers: string[]): Array<{
     'analysis.economy': 'Économie',
     'analysis.timing': 'Timing',
     'analysis.decision': 'Décisions',
+    'analysis.movement': 'Mouvement',
+    'analysis.awareness': 'Conscience',
+    'analysis.teamplay': 'Jeu d\'équipe',
   };
 
   return ANALYSIS_FEATURE_IDS.map((featureId) => ({

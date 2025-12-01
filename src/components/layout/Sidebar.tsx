@@ -2,7 +2,22 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Shield, Globe, Map, FileText, Upload, BarChart2, Target, Settings } from 'lucide-react';
+import {
+  Shield,
+  Globe,
+  Map,
+  FileText,
+  Upload,
+  BarChart2,
+  Target,
+  Settings,
+  GitCompare,
+  Share2,
+  Users,
+  Brain,
+  Dumbbell,
+  Crown,
+} from 'lucide-react';
 
 interface SidebarProps {
   isAdmin?: boolean;
@@ -42,7 +57,7 @@ const navigation = [
   },
 ];
 
-// Navigation secondaire
+// Navigation secondaire - Outils d'analyse
 const secondaryNavigation = [
   {
     name: 'Coaching',
@@ -51,11 +66,52 @@ const secondaryNavigation = [
     description: 'Recommandations',
   },
   {
+    name: 'Comparer',
+    href: '/dashboard/compare',
+    icon: GitCompare,
+    description: 'Comparaison démos',
+  },
+  {
     name: 'Statistiques',
     href: '/dashboard/stats',
     icon: BarChart2,
     description: 'Stats détaillées',
   },
+  {
+    name: 'Export',
+    href: '/dashboard/export',
+    icon: Share2,
+    description: 'Export & partage',
+  },
+];
+
+// Navigation premium
+const premiumNavigation = [
+  {
+    name: 'Coach IA',
+    href: '/dashboard/coach',
+    icon: Brain,
+    description: 'Assistant coaching',
+    premium: true,
+  },
+  {
+    name: 'Équipe',
+    href: '/dashboard/team',
+    icon: Users,
+    description: 'Analyse équipe',
+    premium: true,
+  },
+  {
+    name: 'Entraînement',
+    href: '/dashboard/training',
+    icon: Dumbbell,
+    description: 'Mode training',
+    premium: true,
+  },
+];
+
+// Navigation settings
+const settingsNavigation = [
   {
     name: 'Paramètres',
     href: '/dashboard/settings',
@@ -66,7 +122,7 @@ const secondaryNavigation = [
 
 function getActiveHref(pathname: string): string | undefined {
   // Priorité aux chemins plus spécifiques
-  const allNav = [...navigation, ...secondaryNavigation];
+  const allNav = [...navigation, ...secondaryNavigation, ...premiumNavigation, ...settingsNavigation];
   return allNav
     .filter((item) => pathname === item.href || pathname.startsWith(item.href + '/'))
     .sort((a, b) => b.href.length - a.href.length)[0]?.href;
@@ -155,6 +211,63 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
               </div>
             </div>
 
+            {/* Section: Premium */}
+            <div className="mb-6">
+              <div className="px-3 mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1">
+                <Crown className="w-3 h-3 text-yellow-400" />
+                Premium
+              </div>
+              <div className="space-y-1">
+                {premiumNavigation.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = item.href === activeHref;
+                  return (
+                    <Link
+                      key={item.name}
+                      href={item.href}
+                      className={`group flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${
+                        isActive
+                          ? 'bg-gradient-to-r from-purple-500/20 to-cs2-accent/20 text-white border border-purple-500/30'
+                          : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                      }`}
+                    >
+                      <Icon className="w-5 h-5 flex-shrink-0" />
+                      <span className="font-medium">{item.name}</span>
+                      {item.premium && !isActive && (
+                        <span className="ml-auto px-1.5 py-0.5 text-[10px] bg-yellow-500/20 text-yellow-400 rounded">
+                          PRO
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Section: Settings */}
+            <div className="mb-6">
+              <div className="space-y-1">
+                {settingsNavigation.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = item.href === activeHref;
+                  return (
+                    <Link
+                      key={item.name}
+                      href={item.href}
+                      className={`group flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${
+                        isActive
+                          ? 'bg-cs2-accent text-white'
+                          : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                      }`}
+                    >
+                      <Icon className="w-5 h-5 flex-shrink-0" />
+                      <span className="font-medium">{item.name}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Admin Link */}
             {isAdmin && (
               <div className="pt-4 border-t border-gray-800">
@@ -215,9 +328,9 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
         <div className="flex justify-around py-2">
           {[
             { name: 'Global', href: '/dashboard/overview', icon: Globe },
-            { name: 'Maps', href: '/dashboard/maps', icon: Map },
             { name: 'Démos', href: '/dashboard/demos', icon: FileText },
-            { name: 'Coaching', href: '/dashboard/coaching', icon: Target },
+            { name: 'Coach', href: '/dashboard/coach', icon: Brain },
+            { name: 'Training', href: '/dashboard/training', icon: Dumbbell },
             { name: 'Settings', href: '/dashboard/settings', icon: Settings },
           ].map((item) => {
             const Icon = item.icon;

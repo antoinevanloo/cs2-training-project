@@ -1,18 +1,23 @@
 'use client';
 
-import { forwardRef, SelectHTMLAttributes } from 'react';
+import { forwardRef, SelectHTMLAttributes, ReactNode } from 'react';
+
+interface SelectOption {
+  value: string;
+  label: string;
+}
 
 interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   label?: string;
   error?: string;
-  options: Array<{
-    value: string;
-    label: string;
-  }>;
+  /** Options à afficher (alternative à children) */
+  options?: SelectOption[];
+  /** Children pour les options personnalisées */
+  children?: ReactNode;
 }
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(
-  ({ className = '', label, error, id, options, ...props }, ref) => {
+  ({ className = '', label, error, id, options, children, ...props }, ref) => {
     return (
       <div className="w-full">
         {label && (
@@ -33,11 +38,14 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
           } ${className}`}
           {...props}
         >
-          {options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
+          {/* Supporter les deux modes: options prop ou children */}
+          {options
+            ? options.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))
+            : children}
         </select>
         {error && (
           <p className="mt-1 text-sm text-red-400">{error}</p>

@@ -6,7 +6,8 @@ import { DemoDetailClient } from './DemoDetailClient';
 import type { Round, RoundEvent } from '@/types/rounds';
 import { buildUserFeatureContext, getGlobalFeatureConfig, applyGlobalOverrides } from '@/lib/features/server';
 import { FEATURE_DEFINITIONS } from '@/lib/features/config';
-import { recalculateAnalysisScores } from '@/lib/features/score-calculator';
+import { recalculateAnalysisScores, convertUserWeightsToFeatureWeights } from '@/lib/features/score-calculator';
+import { DEFAULT_CATEGORY_WEIGHTS, type CategoryWeights } from '@/lib/preferences';
 import type { UserFeaturePreferences, UserFeatureOverride } from '@/lib/features/types';
 import { prepareChartData, type ChartData } from '@/lib/rounds';
 
@@ -23,7 +24,7 @@ export default async function DemoDetailPage({
   }
 
   // Recuperer les stats globales pour comparaison et le contexte de features en parallèle
-  const [globalStats, featureContext, globalFeatureConfig] = await Promise.all([
+  const [globalStats, featureContext, globalFeatureConfig, userPrefs] = await Promise.all([
     prisma.userStats.findUnique({
       where: { userId: user.id },
       select: {
@@ -35,6 +36,13 @@ export default async function DemoDetailPage({
     }),
     buildUserFeatureContext(user.id),
     getGlobalFeatureConfig(),
+    prisma.userPreferences.findUnique({
+      where: { userId: user.id },
+      select: {
+        priorityCategories: true,
+        categoryWeights: true,
+      },
+    }),
   ]);
 
   // Calculer les features d'analyse activées
@@ -81,6 +89,12 @@ export default async function DemoDetailPage({
   // Recuperer le joueur principal
   const mainPlayer = demo.playerStats.find((p) => p.isMainPlayer);
 
+  // Calculer les poids personnalisés pour le recalcul des scores
+  const categoryWeights: CategoryWeights = userPrefs?.categoryWeights
+    ? (userPrefs.categoryWeights as unknown as CategoryWeights)
+    : DEFAULT_CATEGORY_WEIGHTS;
+  const customWeights = convertUserWeightsToFeatureWeights(categoryWeights);
+
   // Transformer les données pour le client
   const demoData = {
     id: demo.id,
@@ -113,6 +127,7 @@ export default async function DemoDetailPage({
     analysis: demo.analysis
       ? (() => {
           // Recalculer les scores en fonction des analyseurs activés
+          // Convertir null en undefined pour la compatibilité avec le type AnalysisScores
           const originalScores = {
             overallScore: demo.analysis!.overallScore,
             aimScore: demo.analysis!.aimScore,
@@ -121,11 +136,11 @@ export default async function DemoDetailPage({
             economyScore: demo.analysis!.economyScore,
             timingScore: demo.analysis!.timingScore,
             decisionScore: demo.analysis!.decisionScore,
-          movementScore: demo.analysis!.movementScore,
-            awarenessScore: demo.analysis!.awarenessScore,
-            teamplayScore: demo.analysis!.teamplayScore,
+            movementScore: demo.analysis!.movementScore ?? undefined,
+            awarenessScore: demo.analysis!.awarenessScore ?? undefined,
+            teamplayScore: demo.analysis!.teamplayScore ?? undefined,
           };
-          const recalculatedScores = recalculateAnalysisScores(originalScores, enabledAnalyzers);
+          const recalculatedScores = recalculateAnalysisScores(originalScores, enabledAnalyzers, customWeights);
 
           return {
             overallScore: recalculatedScores.overallScore ?? originalScores.overallScore,
@@ -158,6 +173,7 @@ export default async function DemoDetailPage({
   };
 
   // Préparer les données de features pour le client
+  const priorityCategories = (userPrefs?.priorityCategories as string[] | null) ?? [];
   const featureData = featureContext
     ? {
         tier: featureContext.tier,
@@ -166,6 +182,7 @@ export default async function DemoDetailPage({
         preferences: featureContext.preferences as UserFeaturePreferences,
         overrides: featureContext.overrides as UserFeatureOverride[],
         enabledAnalyzers,
+        priorityCategories,
       }
     : {
         tier: 'FREE' as const,
@@ -174,6 +191,7 @@ export default async function DemoDetailPage({
         preferences: { disabledFeatures: [], enabledFeatures: [], featureConfigs: {} },
         overrides: [],
         enabledAnalyzers,
+        priorityCategories,
       };
 
   // Préparer les données de charts (côté serveur)

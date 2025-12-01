@@ -1,11 +1,14 @@
 'use client';
 
+import { useMemo } from 'react';
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
-import { Progress } from '@/components/ui/Progress';
 import { ProgressChart } from '@/components/dashboard/ProgressChart';
 import { GranularityBadge } from '@/components/ui/GranularityBadge';
-import { MetricDisplay, MetricCard } from '@/components/ui/MetricDisplay';
+import { MetricDisplay } from '@/components/ui/MetricDisplay';
+import { CategoryScoreCard } from '@/components/ui/CategoryScoreCard';
+import { InfoTooltip } from '@/components/ui/InfoTooltip';
+import { getAdjustedWeights, convertUserWeightsToFeatureWeights } from '@/lib/features/score-calculator';
 import {
   Target,
   Crosshair,
@@ -14,13 +17,20 @@ import {
   DollarSign,
   Clock,
   Brain,
-  TrendingUp,
   AlertTriangle,
   ChevronRight,
   Upload,
   Map,
   FileText,
+  Move,
+  Eye,
+  Users,
+  Settings,
+  Lock,
+  Star,
 } from 'lucide-react';
+import type { CategoryWeights } from '@/lib/preferences';
+import type { AnalysisCategory } from '@/lib/preferences/types';
 
 interface OverviewClientProps {
   stats: {
@@ -53,6 +63,9 @@ interface OverviewClientProps {
     avgEconomy: number;
     avgTiming: number;
     avgDecision: number;
+    avgMovement: number;
+    avgAwareness: number;
+    avgTeamplay: number;
   } | null;
   recurringWeaknesses: Array<{
     name: string;
@@ -60,15 +73,25 @@ interface OverviewClientProps {
     percentage: number;
   }>;
   userName: string;
+  /** IDs des analyseurs activés (ex: ['analysis.aim', 'analysis.positioning']) */
+  enabledAnalyzers: string[];
+  /** Poids personnalisés des catégories */
+  categoryWeights: CategoryWeights;
+  /** Catégories prioritaires (affichées en premier avec étoile) */
+  priorityCategories: string[];
 }
 
+// Configuration complète des 9 catégories v2
 const CATEGORY_CONFIG = [
-  { key: 'aim', label: 'Aim', icon: Crosshair, color: 'text-red-400', bgColor: 'bg-red-500/20' },
-  { key: 'positioning', label: 'Position', icon: MapPin, color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
-  { key: 'utility', label: 'Utility', icon: Bomb, color: 'text-green-400', bgColor: 'bg-green-500/20' },
-  { key: 'economy', label: 'Economy', icon: DollarSign, color: 'text-yellow-400', bgColor: 'bg-yellow-500/20' },
-  { key: 'timing', label: 'Timing', icon: Clock, color: 'text-purple-400', bgColor: 'bg-purple-500/20' },
-  { key: 'decision', label: 'Decision', icon: Brain, color: 'text-orange-400', bgColor: 'bg-orange-500/20' },
+  { key: 'aim', featureId: 'analysis.aim', label: 'Aim', icon: Crosshair, color: 'text-red-400', bgColor: 'bg-red-500/20' },
+  { key: 'positioning', featureId: 'analysis.positioning', label: 'Position', icon: MapPin, color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
+  { key: 'utility', featureId: 'analysis.utility', label: 'Utility', icon: Bomb, color: 'text-green-400', bgColor: 'bg-green-500/20' },
+  { key: 'economy', featureId: 'analysis.economy', label: 'Economy', icon: DollarSign, color: 'text-yellow-400', bgColor: 'bg-yellow-500/20' },
+  { key: 'timing', featureId: 'analysis.timing', label: 'Timing', icon: Clock, color: 'text-purple-400', bgColor: 'bg-purple-500/20' },
+  { key: 'decision', featureId: 'analysis.decision', label: 'Decision', icon: Brain, color: 'text-orange-400', bgColor: 'bg-orange-500/20' },
+  { key: 'movement', featureId: 'analysis.movement', label: 'Movement', icon: Move, color: 'text-cyan-400', bgColor: 'bg-cyan-500/20' },
+  { key: 'awareness', featureId: 'analysis.awareness', label: 'Awareness', icon: Eye, color: 'text-pink-400', bgColor: 'bg-pink-500/20' },
+  { key: 'teamplay', featureId: 'analysis.teamplay', label: 'Teamplay', icon: Users, color: 'text-emerald-400', bgColor: 'bg-emerald-500/20' },
 ];
 
 export function OverviewClient({
@@ -78,7 +101,50 @@ export function OverviewClient({
   analysisStats,
   recurringWeaknesses,
   userName,
+  enabledAnalyzers,
+  categoryWeights,
+  priorityCategories,
 }: OverviewClientProps) {
+  // Calculer les poids ajustés en fonction des catégories activées
+  const customWeights = useMemo(() => {
+    return convertUserWeightsToFeatureWeights(categoryWeights);
+  }, [categoryWeights]);
+
+  const adjustedWeights = useMemo(() => {
+    return getAdjustedWeights(enabledAnalyzers, customWeights);
+  }, [enabledAnalyzers, customWeights]);
+
+  // Nombre de catégories activées/désactivées
+  const enabledCount = enabledAnalyzers.filter(id => id.startsWith('analysis.')).length;
+  const disabledCount = CATEGORY_CONFIG.length - enabledCount;
+
+  // Trier les catégories: prioritaires d'abord, puis les autres
+  const orderedCategories = useMemo(() => {
+    if (priorityCategories.length === 0) return CATEGORY_CONFIG;
+    const prioritySet = new Set(priorityCategories);
+    const priorityCats = CATEGORY_CONFIG.filter(c => prioritySet.has(c.key));
+    const otherCats = CATEGORY_CONFIG.filter(c => !prioritySet.has(c.key));
+    return [...priorityCats, ...otherCats];
+  }, [priorityCategories]);
+
+  // Préparer les catégories avec leur état d'activation
+  const categoriesWithState = useMemo(() => {
+    return orderedCategories.map(cat => ({
+      ...cat,
+      isEnabled: enabledAnalyzers.includes(cat.featureId),
+      isPriority: priorityCategories.includes(cat.key),
+      originalWeight: customWeights[cat.featureId] ?? 11.11,
+      adjustedWeight: adjustedWeights[cat.featureId],
+    }));
+  }, [orderedCategories, enabledAnalyzers, priorityCategories, customWeights, adjustedWeights]);
+
+  // Récupérer le score pour une catégorie
+  const getScore = (key: string): number | undefined => {
+    if (!analysisStats) return undefined;
+    const scoreKey = `avg${key.charAt(0).toUpperCase() + key.slice(1)}` as keyof typeof analysisStats;
+    return analysisStats[scoreKey] as number | undefined;
+  };
+
   if (!stats || stats.totalDemos === 0) {
     return <EmptyState userName={userName} />;
   }
@@ -144,51 +210,84 @@ export function OverviewClient({
 
       {/* Grille principale */}
       <div className="grid lg:grid-cols-3 gap-6">
-        {/* 6 Catégories d'analyse */}
+        {/* Catégories d'analyse (toutes catégories, désactivées grisées) */}
         <Card className="lg:col-span-2 border-gray-800/50 bg-gradient-to-br from-gray-900/50 to-gray-800/30">
           <CardHeader className="flex flex-row items-center justify-between">
             <div className="flex items-center gap-3">
               <CardTitle>Scores d&apos;analyse</CardTitle>
               <GranularityBadge level="global" showLabel />
+              <InfoTooltip
+                variant="help"
+                size="sm"
+                content={
+                  <div className="space-y-2">
+                    <div className="font-medium text-white">Système de poids</div>
+                    <p className="text-xs text-gray-300">
+                      Chaque catégorie a un poids qui détermine son importance dans le score global.
+                      Par défaut, toutes les catégories ont le même poids (11.11%).
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      Quand vous désactivez une catégorie, son poids est redistribué proportionnellement
+                      aux autres catégories actives.
+                    </p>
+                    <Link
+                      href="/dashboard/settings"
+                      className="text-cs2-accent text-xs hover:underline block mt-2"
+                    >
+                      Personnaliser les poids →
+                    </Link>
+                  </div>
+                }
+              />
             </div>
-            <span className="text-xs text-gray-500">
-              Basé sur {analysisStats?.count || 0} analyses
-            </span>
+            <div className="flex items-center gap-3">
+              {disabledCount > 0 && (
+                <span className="text-xs text-gray-500 flex items-center gap-1">
+                  <Lock className="w-3 h-3" />
+                  {disabledCount} désactivée{disabledCount > 1 ? 's' : ''}
+                </span>
+              )}
+              <span className="text-xs text-gray-500">
+                {analysisStats?.count || 0} analyses
+              </span>
+            </div>
           </CardHeader>
           <CardContent>
             {analysisStats ? (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                {CATEGORY_CONFIG.map((cat) => {
-                  const Icon = cat.icon;
-                  const score = analysisStats[`avg${cat.key.charAt(0).toUpperCase() + cat.key.slice(1)}` as keyof typeof analysisStats] as number;
-                  const metricId = `${cat.key}Score`;
-                  return (
-                    <div
-                      key={cat.key}
-                      className="p-4 rounded-lg bg-gray-900/50 border border-gray-800/50 hover:border-gray-700/50 transition-colors"
-                    >
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className={`p-1.5 rounded ${cat.bgColor}`}>
-                          <Icon className={`w-4 h-4 ${cat.color}`} />
-                        </div>
-                        <span className="text-sm font-medium text-gray-300">{cat.label}</span>
-                      </div>
-                      <MetricDisplay
-                        metricId={metricId}
-                        value={score}
-                        granularity="global"
-                        showGranularity={false}
-                        size="md"
-                      />
-                      <Progress
-                        value={score}
-                        color="score"
-                        size="sm"
-                        className="mt-2"
-                      />
-                    </div>
-                  );
-                })}
+                {categoriesWithState.map((cat) => (
+                  <div key={cat.key} className="relative">
+                    {cat.isPriority && (
+                      <Star className="absolute -top-1 -right-1 w-4 h-4 text-yellow-400 fill-yellow-400 z-10" />
+                    )}
+                    <CategoryScoreCard
+                      category={cat.key as AnalysisCategory}
+                      label={cat.label}
+                      score={cat.isEnabled ? getScore(cat.key) : undefined}
+                      icon={cat.icon}
+                      iconColor={cat.color}
+                      iconBgColor={cat.bgColor}
+                      isEnabled={cat.isEnabled}
+                      disabledReason="disabled_by_user"
+                      originalWeight={cat.originalWeight}
+                      adjustedWeight={cat.adjustedWeight}
+                      showWeightInfo={true}
+                      size="md"
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : enabledCount === 0 ? (
+              <div className="text-center py-8 text-gray-400">
+                <Lock className="w-8 h-8 mx-auto mb-3 text-gray-600" />
+                <p>Toutes les catégories sont désactivées.</p>
+                <Link
+                  href="/dashboard/settings"
+                  className="text-cs2-accent hover:underline text-sm mt-2 inline-flex items-center gap-1"
+                >
+                  <Settings className="w-4 h-4" />
+                  Configurer les analyseurs
+                </Link>
               </div>
             ) : (
               <div className="text-center py-8 text-gray-400">

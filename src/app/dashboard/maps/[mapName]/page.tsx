@@ -2,6 +2,10 @@ import { requireAuth } from '@/lib/auth/utils';
 import { prisma } from '@/lib/db/prisma';
 import { notFound } from 'next/navigation';
 import { MapDetailClient } from './MapDetailClient';
+import { buildUserFeatureContext, getGlobalFeatureConfig, applyGlobalOverrides } from '@/lib/features/server';
+import { FEATURE_DEFINITIONS } from '@/lib/features/config';
+import type { UserFeaturePreferences } from '@/lib/features/types';
+import type { CategoryWeights, AnalysisCategory } from '@/lib/preferences/types';
 
 interface Props {
   params: { mapName: string };
@@ -17,17 +21,54 @@ export default async function MapDetailPage({ params }: Props) {
   const user = await requireAuth();
   const mapName = params.mapName.toLowerCase();
 
-  // Récupérer toutes les données pour cette map
-  const mapData = await getMapData(user.id, mapName);
+  // Récupérer toutes les données pour cette map et le contexte de features en parallèle
+  const [mapData, featureContext, globalFeatureConfig, userPrefs] = await Promise.all([
+    getMapData(user.id, mapName),
+    buildUserFeatureContext(user.id),
+    getGlobalFeatureConfig(),
+    prisma.userPreferences.findUnique({
+      where: { userId: user.id },
+      select: {
+        categoryWeights: true,
+        priorityCategories: true,
+      },
+    }),
+  ]);
 
   if (!mapData || mapData.demos.length === 0) {
     notFound();
   }
 
+  // Calculer les features d'analyse activées
+  const enabledAnalyzers = featureContext
+    ? Object.values(FEATURE_DEFINITIONS)
+        .filter((f) => f.category === 'analysis')
+        .filter((f) => {
+          const featureWithOverrides = applyGlobalOverrides(f, globalFeatureConfig);
+          if (featureWithOverrides.status !== 'enabled') {
+            if (featureWithOverrides.status === 'beta' && !featureContext.isBetaTester && !featureContext.isAlphaTester) return false;
+            if (featureWithOverrides.status === 'alpha' && !featureContext.isAlphaTester) return false;
+            if (['disabled', 'deprecated', 'coming_soon'].includes(featureWithOverrides.status)) return false;
+          }
+          const tierOrder = ['FREE', 'STARTER', 'PRO', 'TEAM', 'ENTERPRISE'];
+          if (tierOrder.indexOf(featureContext.tier) < tierOrder.indexOf(featureWithOverrides.minTier)) return false;
+          if (featureContext.preferences.disabledFeatures.includes(f.id)) return false;
+          return true;
+        })
+        .map((f) => f.id)
+    : ['analysis.aim', 'analysis.positioning', 'analysis.utility', 'analysis.economy', 'analysis.timing', 'analysis.decision'];
+
+  // Préparer les poids et priorités
+  const categoryWeights = (userPrefs?.categoryWeights as CategoryWeights | null) ?? undefined;
+  const priorityCategories = (userPrefs?.priorityCategories as AnalysisCategory[] | null) ?? [];
+
   return (
     <MapDetailClient
       mapName={mapName}
       data={mapData}
+      enabledAnalyzers={enabledAnalyzers}
+      categoryWeights={categoryWeights}
+      priorityCategories={priorityCategories}
     />
   );
 }
@@ -54,6 +95,9 @@ async function getMapData(userId: string, mapName: string) {
           economyScore: true,
           timingScore: true,
           decisionScore: true,
+          movementScore: true,
+          awarenessScore: true,
+          teamplayScore: true,
           aimAnalysis: true,
           positioningAnalysis: true,
           strengths: true,
@@ -109,7 +153,7 @@ async function getMapData(userId: string, mapName: string) {
     stats.totalDeaths = validDemos.reduce((sum, d) => sum + (d.playerStats[0]?.deaths || 0), 0);
   }
 
-  // Scores d'analyse agrégés
+  // Scores d'analyse agrégés (9 catégories v2)
   const analysisScores = analyzedDemos.length > 0 ? {
     avgOverall: analyzedDemos.reduce((sum, d) => sum + (d.analysis?.overallScore || 0), 0) / analyzedDemos.length,
     avgAim: analyzedDemos.reduce((sum, d) => sum + (d.analysis?.aimScore || 0), 0) / analyzedDemos.length,
@@ -118,6 +162,9 @@ async function getMapData(userId: string, mapName: string) {
     avgEconomy: analyzedDemos.reduce((sum, d) => sum + (d.analysis?.economyScore || 0), 0) / analyzedDemos.length,
     avgTiming: analyzedDemos.reduce((sum, d) => sum + (d.analysis?.timingScore || 0), 0) / analyzedDemos.length,
     avgDecision: analyzedDemos.reduce((sum, d) => sum + (d.analysis?.decisionScore || 0), 0) / analyzedDemos.length,
+    avgMovement: analyzedDemos.reduce((sum, d) => sum + (d.analysis?.movementScore || 0), 0) / analyzedDemos.length,
+    avgAwareness: analyzedDemos.reduce((sum, d) => sum + (d.analysis?.awarenessScore || 0), 0) / analyzedDemos.length,
+    avgTeamplay: analyzedDemos.reduce((sum, d) => sum + (d.analysis?.teamplayScore || 0), 0) / analyzedDemos.length,
   } : null;
 
   // Faiblesses récurrentes sur cette map

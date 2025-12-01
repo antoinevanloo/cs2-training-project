@@ -1,9 +1,13 @@
 import { requireAuth } from '@/lib/auth/utils';
 import { prisma } from '@/lib/db/prisma';
 import { CompareClient } from './CompareClient';
+import { getServerEnabledAnalysisFeatures } from '@/lib/features/server';
 
 export default async function ComparePage() {
   const user = await requireAuth();
+
+  // Charger les features activées pour l'utilisateur
+  const enabledAnalyzers = await getServerEnabledAnalysisFeatures(user.id);
 
   // Fetch user's demos for selection
   const demos = await prisma.demo.findMany({
@@ -80,6 +84,7 @@ export default async function ComparePage() {
         avgKast: userStats.avgKast,
         avgHsPercent: userStats.avgHsPercent,
       } : null}
+      enabledAnalyzers={enabledAnalyzers}
     />
   );
 }
