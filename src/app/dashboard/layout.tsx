@@ -3,6 +3,10 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
 import prisma from '@/lib/db/prisma';
 
+// Forcer le rendu dynamique pour toutes les pages du dashboard
+// car elles nécessitent l'authentification et des données utilisateur
+export const dynamic = 'force-dynamic';
+
 export default async function DashboardLayout({
   children,
 }: {

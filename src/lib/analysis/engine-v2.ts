@@ -112,10 +112,10 @@ export interface AnalysisResultV2 {
     economy: number;
     timing: number;
     decision: number;
-    // Nouveaux scores
-    movement: number;
-    awareness: number;
-    teamplay: number;
+    // Nouveaux scores (null si parser v1 utilisé - données non disponibles)
+    movement: number | null;
+    awareness: number | null;
+    teamplay: number | null;
   };
 
   // Analyses détaillées par catégorie

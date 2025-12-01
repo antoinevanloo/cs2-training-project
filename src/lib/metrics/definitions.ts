@@ -8,60 +8,17 @@
  * - Formatage d'affichage
  */
 
-import { GranularityLevel } from '@/components/ui/GranularityBadge';
+// Importer les types depuis le fichier de types partagé
+import type {
+  GranularityLevel,
+  MetricCategory,
+  MetricFormat,
+  InterpretationThreshold,
+  MetricDefinition,
+} from './types';
 
-// Types
-export type MetricCategory =
-  | 'performance'
-  | 'aim'
-  | 'positioning'
-  | 'utility'
-  | 'economy'
-  | 'timing'
-  | 'decision';
-
-export type MetricFormat = 'decimal' | 'percentage' | 'integer' | 'ratio' | 'time';
-
-export interface InterpretationThreshold {
-  max: number;
-  label: string;
-  color: 'red' | 'orange' | 'yellow' | 'green' | 'blue';
-  description: string;
-}
-
-export interface MetricDefinition {
-  id: string;
-  name: string;
-  shortName: string;
-  category: MetricCategory;
-
-  // Explication
-  description: string;
-  detailedDescription?: string;
-  formula?: string;
-  formulaExplanation?: string;
-
-  // Comment interpréter les valeurs
-  interpretation: InterpretationThreshold[];
-
-  // À quelle échelle cette métrique peut être calculée
-  availableGranularities: GranularityLevel[];
-  defaultGranularity: GranularityLevel;
-
-  // Comment cette métrique est agrégée
-  aggregationMethod?: 'average' | 'sum' | 'weighted' | 'last';
-
-  // Formatage
-  format: MetricFormat;
-  unit?: string;
-  decimals?: number;
-
-  // Liens vers d'autres ressources
-  learnMoreUrl?: string;
-
-  // Feature flag (si la métrique dépend d'une feature)
-  featureFlag?: string;
-}
+// Re-exporter les types pour la compatibilité
+export type { GranularityLevel, MetricCategory, MetricFormat, InterpretationThreshold, MetricDefinition };
 
 // ============================================
 // MÉTRIQUES DE PERFORMANCE (Niveau joueur)

@@ -1,15 +1,13 @@
 import PgBoss from 'pg-boss';
 import prisma from '@/lib/db/prisma';
-import { parseDemoFileV2, validateDemoFile, isParserV2Available } from '@/lib/demo-parser/parser-v2';
-import { parseDemoFile } from '@/lib/demo-parser/parser';
 import {
   extractPlayerStats,
   getPlayerTeam,
   determineMatchResult,
   calculateEntryStats,
 } from '@/lib/demo-parser/extractor';
+import { parserContext } from '@/lib/demo-parser/strategies';
 import { analysisEngineV2, AnalysisResultV2 } from '@/lib/analysis/engine-v2';
-import { analysisEngine } from '@/lib/analysis/engine';
 import { coachingEngine } from '@/lib/coaching/engine';
 import { calculateSimpleRating } from '@/lib/analysis/calculators/rating';
 import { JOB_TYPES, ProcessDemoPayload } from '../queue';
@@ -22,10 +20,23 @@ export function registerDemoProcessorWorker(boss: PgBoss): void {
     async (job) => {
       const { demoId, userId, filePath: rawFilePath } = job.data;
 
-      const filePath = rawFilePath.startsWith('/') ? rawFilePath : `/${rawFilePath}`;
+      // Convert path for Docker environment
+      // Host path: /Users/.../data/demos/... -> Container path: /data/demos/...
+      let filePath = rawFilePath.startsWith('/') ? rawFilePath : `/${rawFilePath}`;
+
+      // If running in Docker (STORAGE_PATH=/data) and path contains local dev path
+      const storagePath = process.env.STORAGE_PATH || '/data';
+      const dataPathMatch = filePath.match(/\/data\/demos\/.+$/);
+      if (dataPathMatch && storagePath === '/data') {
+        // Extract the relative path from /data/demos/...
+        filePath = dataPathMatch[0];
+      }
 
       const shortJobId = job.id.slice(0, 8);
       console.log(`[${shortJobId}] Processing demo ${demoId}`);
+      console.log(`[${shortJobId}] File path: ${filePath}`);
+
+      const parseStartTime = Date.now();
 
       try {
         const existingDemo = await prisma.demo.findUnique({
@@ -48,31 +59,87 @@ export function registerDemoProcessorWorker(boss: PgBoss): void {
           data: { status: 'PROCESSING', processingStartedAt: new Date() },
         });
 
-        const validation = await validateDemoFile(filePath);
+        // Utiliser le ParserContext pour valider et parser
+        console.log(`[${shortJobId}] Validating file: ${filePath}`);
+
+        // Retry logic for file access (prevent race condition)
+        let validation: { valid: boolean; error?: string } = { valid: false, error: 'No validation attempt' };
+        let retries = 0;
+        const maxRetries = 5;
+
+        while (retries < maxRetries) {
+          validation = await parserContext.validateFile(filePath, {
+            onLog: (msg) => console.log(`[${shortJobId}] ${msg}`),
+          });
+
+          if (validation.valid) {
+            break;
+          }
+
+          // Check if error is "file not found" - if so, retry
+          if (validation.error?.includes('ENOENT') || validation.error?.includes('no such file')) {
+            retries++;
+            if (retries < maxRetries) {
+              console.log(`[${shortJobId}] File not found, retrying (${retries}/${maxRetries})...`);
+              await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms before retry
+              continue;
+            }
+          }
+
+          // Other errors - don't retry
+          break;
+        }
+
         if (!validation.valid) {
-          throw new Error(validation.error || 'Fichier .dem invalide ou corrompu');
+          const errorMsg = validation.error || 'Fichier .dem invalide ou corrompu';
+          console.log(`[${shortJobId}] Validation failed: ${errorMsg}`);
+
+          // Handle missing file as a special case - cleanup orphaned record
+          if (errorMsg.includes('ENOENT') || errorMsg.includes('no such file')) {
+            console.log(`[${shortJobId}] File permanently missing, cleaning up orphaned demo record...`);
+            try {
+              await prisma.demo.delete({
+                where: { id: demoId }
+              });
+              console.log(`[${shortJobId}] Orphaned demo record deleted successfully`);
+              // Don't throw - treat as handled cleanup
+              return;
+            } catch (cleanupError) {
+              console.error(`[${shortJobId}] Failed to cleanup orphaned record:`, cleanupError);
+              // Even if cleanup fails, consider this handled to avoid duplicate errors
+              return;
+            }
+          }
+
+          // For other validation errors, throw to trigger standard error handling
+          throw new Error(errorMsg);
+        }
+        console.log(`[${shortJobId}] File validation passed`);
+
+        // Parser avec sélection automatique du meilleur parser disponible
+        const parseResult = await parserContext.parse(
+          filePath,
+          {
+            extractWeaponFires: true,
+            extractPositions: true,
+            positionSampleRate: 64,
+          },
+          {
+            onLog: (msg) => console.log(`[${shortJobId}] ${msg}`),
+          }
+        );
+
+        if (!parseResult.success || !parseResult.data) {
+          throw new Error(parseResult.error || 'Erreur de parsing inconnue');
         }
 
-        // Détecter si le parser v2 est disponible
-        const useV2Parser = await isParserV2Available();
-        if (!useV2Parser) {
-          console.log(`[${shortJobId}] Using V1 parser (fallback)`);
-        }
-
-        // Parser la démo avec v2 ou v1
-        let parsedData: ParsedDemoDataV2;
-        const parseStartTime = Date.now();
-        if (useV2Parser) {
-          parsedData = await parseDemoFileV2(filePath);
-        } else {
-          const v1Data = await parseDemoFile(filePath);
-          parsedData = convertV1ToV2Format(v1Data);
-        }
-        const parseTime = ((Date.now() - parseStartTime) / 1000).toFixed(1);
+        const parsedData: ParsedDemoDataV2 = parseResult.data;
+        const isV2Parser = parseResult.parserVersion.startsWith('2');
+        const parseTime = (parseResult.parseTimeMs / 1000).toFixed(1);
 
         // Log parsing summary
         console.log(
-          `[${shortJobId}] Parsed ${parsedData.metadata.map} in ${parseTime}s ` +
+          `[${shortJobId}] Parsed ${parsedData.metadata.map} with ${parseResult.parserVersion} in ${parseTime}s ` +
           `(${parsedData.rounds.length} rounds, ${parsedData.kills.length} kills)`
         );
 
@@ -97,14 +164,21 @@ export function registerDemoProcessorWorker(boss: PgBoss): void {
         const matchResult = determineMatchResult(parsedData as any, playerTeam);
         const totalRounds = parsedData.rounds.length;
 
-        // Run analysis & coaching (CPU intensive tasks) before the transaction
-        let analysisResult: AnalysisResultV2;
-        if (useV2Parser) {
-          analysisResult = await analysisEngineV2.analyzeDemo(parsedData, mainPlayerSteamId);
-        } else {
-          const v1Result = await analysisEngine.analyzeDemo(parsedData as any, mainPlayerSteamId);
-          analysisResult = convertV1AnalysisToV2(v1Result);
+        // Run analysis avec engine v2 (toujours)
+        // Le ParserContext garantit que parsedData est au format v2
+        // Si parser v1 utilisé, les champs v2 seront vides et les scores v2 seront null
+        const analysisResult = await analysisEngineV2.analyzeDemo(parsedData, mainPlayerSteamId);
+
+        // Si parser v1 utilisé, forcer les scores v2 à null
+        if (!isV2Parser) {
+          analysisResult.scores.movement = null;
+          analysisResult.scores.awareness = null;
+          analysisResult.scores.teamplay = null;
+          analysisResult.analyses.movement = null;
+          analysisResult.analyses.awareness = null;
+          analysisResult.analyses.teamplay = null;
         }
+
         const coachingReport = coachingEngine.generateReport(analysisResult as any);
 
         // All database writes are now in a single transaction
@@ -370,10 +444,10 @@ function convertV1AnalysisToV2(v1Result: any): AnalysisResultV2 {
       economy: v1Result.scores?.economy || 50,
       timing: v1Result.scores?.timing || 50,
       decision: v1Result.scores?.decision || 50,
-      // Scores v2 avec valeurs par défaut
-      movement: 50,
-      awareness: 50,
-      teamplay: 50,
+      // Scores v2 null quand parser v1 (données non disponibles)
+      movement: null,
+      awareness: null,
+      teamplay: null,
     },
     analyses: {
       aim: v1Result.analyses?.aim || {},

@@ -6,6 +6,22 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { TIER_COLORS } from '@/lib/constants/tiers';
+import { DisplaySettings } from './DisplaySettings';
+import { AnalysisSettings } from './AnalysisSettings';
+import { GoalsSettings } from './GoalsSettings';
+import { FeaturesSettings } from './FeaturesSettings';
+import { PreferencesProvider } from '@/lib/preferences/context';
+import {
+  User,
+  CreditCard,
+  Settings,
+  Target,
+  Sliders,
+  Monitor,
+  Gamepad2,
+  HardDrive,
+  Zap,
+} from 'lucide-react';
 
 const maps = [
   { value: 'de_dust2', label: 'Dust II' },
@@ -82,6 +98,18 @@ export default function SettingsPage() {
   const [tierLimits, setTierLimits] = useState<TierLimits>({ demosPerMonth: 3, historyDays: 7, storageMaxMb: 200 });
   const [subscriptionExpiresAt, setSubscriptionExpiresAt] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+
+  // Tab state
+  type SettingsTab = 'profile' | 'display' | 'analysis' | 'goals' | 'features';
+  const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
+
+  const tabs: { id: SettingsTab; label: string; icon: typeof User }[] = [
+    { id: 'profile', label: 'Profil', icon: User },
+    { id: 'display', label: 'Affichage', icon: Monitor },
+    { id: 'analysis', label: 'Analyse', icon: Sliders },
+    { id: 'goals', label: 'Objectifs', icon: Target },
+    { id: 'features', label: 'Fonctionnalités', icon: Zap },
+  ];
 
   // Charger les données utilisateur
   useEffect(() => {
@@ -252,25 +280,80 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6 pb-20 lg:pb-0 max-w-2xl">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Paramètres</h1>
-        <p className="text-gray-400 mt-1">Gérez vos préférences</p>
-      </div>
-
-      {message && (
-        <div
-          className={`p-4 rounded-lg ${
-            message.type === 'success'
-              ? 'bg-green-500/10 border border-green-500/50 text-green-400'
-              : 'bg-red-500/10 border border-red-500/50 text-red-400'
-          }`}
-        >
-          {message.text}
+    <PreferencesProvider>
+      <div className="space-y-6 pb-20 lg:pb-0">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Paramètres</h1>
+          <p className="text-gray-400 mt-1">Gérez vos préférences et personnalisez votre expérience</p>
         </div>
-      )}
 
-      {/* Subscription Card */}
+        {/* Tab Navigation */}
+        <div className="flex gap-2 overflow-x-auto pb-2">
+          {tabs.map(tab => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`
+                  flex items-center gap-2 px-4 py-2 rounded-lg whitespace-nowrap transition-colors
+                  ${activeTab === tab.id
+                    ? 'bg-cs2-accent text-white'
+                    : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
+                  }
+                `}
+              >
+                <Icon className="w-4 h-4" />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {message && (
+          <div
+            className={`p-4 rounded-lg ${
+              message.type === 'success'
+                ? 'bg-green-500/10 border border-green-500/50 text-green-400'
+                : 'bg-red-500/10 border border-red-500/50 text-red-400'
+            }`}
+          >
+            {message.text}
+          </div>
+        )}
+
+        {/* Display Settings Tab */}
+        {activeTab === 'display' && (
+          <div className="max-w-2xl">
+            <DisplaySettings />
+          </div>
+        )}
+
+        {/* Analysis Settings Tab */}
+        {activeTab === 'analysis' && (
+          <div className="max-w-3xl">
+            <AnalysisSettings />
+          </div>
+        )}
+
+        {/* Goals Settings Tab */}
+        {activeTab === 'goals' && (
+          <div className="max-w-2xl">
+            <GoalsSettings />
+          </div>
+        )}
+
+        {/* Features Settings Tab */}
+        {activeTab === 'features' && (
+          <div className="max-w-3xl">
+            <FeaturesSettings />
+          </div>
+        )}
+
+        {/* Profile Tab (existing content) */}
+        {activeTab === 'profile' && (
+          <div className="max-w-2xl space-y-6">
+            {/* Subscription Card */}
       <Card className="mb-6">
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -653,7 +736,9 @@ export default function SettingsPage() {
           </Button>
         </div>
       </form>
-
-    </div>
+          </div>
+        )}
+      </div>
+    </PreferencesProvider>
   );
 }

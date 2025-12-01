@@ -12,6 +12,44 @@ export async function ensureUserStorageExists(userId: string): Promise<void> {
 }
 
 /**
+ * Validate demo file header
+ * CS2 demo files must start with 'HL2DEMO'
+ */
+export function validateDemoFileHeader(buffer: Buffer): { valid: boolean; error?: string } {
+  if (buffer.length < 8) {
+    return {
+      valid: false,
+      error: 'Le fichier est trop petit pour être une démo valide (< 8 bytes)',
+    };
+  }
+
+  const header = buffer.toString('ascii', 0, 8);
+  if (!header.startsWith('HL2DEMO')) {
+    // Try to provide helpful diagnostic info
+    if (header.match(/^[\x00-\x1F\x7F-\xFF]/)) {
+      // Contains binary junk at start
+      return {
+        valid: false,
+        error: 'Ce fichier ne semble pas être une démo CS2 valide (header invalide)',
+      };
+    }
+    if (header.includes('PK')) {
+      // Looks like a ZIP/archive
+      return {
+        valid: false,
+        error: 'Ce fichier semble être une archive. Assurez-vous d\'uploader le fichier .dem brut, pas compressé.',
+      };
+    }
+    return {
+      valid: false,
+      error: 'Ce fichier n\'est pas une démo CS2 valide. Vérifiez que vous uploadez bien un fichier .dem.',
+    };
+  }
+
+  return { valid: true };
+}
+
+/**
  * Save a demo file to local storage
  */
 export async function saveDemoFile(

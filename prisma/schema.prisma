@@ -803,6 +803,97 @@ model FeatureUsage {
 }
 
 // ============================================
+// USER PREFERENCES & GOALS (v2)
+// ============================================
+
+// Préférences utilisateur pour personnalisation maximale
+model UserPreferences {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Display
+  theme             String   @default("dark")   // dark, light, system, gaming
+  language          String   @default("fr")     // fr, en
+  compactMode       Boolean  @default(false)    // Dense UI pour experts
+  animationLevel    String   @default("full")   // full, reduced, none
+  chartStyle        String   @default("filled") // filled, line, both
+  colorScheme       String   @default("default") // default, colorblind, highContrast
+
+  // Dashboard
+  dashboardLayout   Json     @default("[]")     // Ordre des widgets
+  hiddenWidgets     String[] @default([])       // IDs des widgets masqués
+  pinnedMetrics     String[] @default([])       // Métriques épinglées
+
+  // Analysis
+  categoryWeights   Json?    // Poids perso par catégorie { aim: 20, positioning: 15, ... }
+  metricThresholds  Json?    // Seuils personnalisés { hsPercentage: { good: 45, excellent: 55 }, ... }
+  priorityCategories String[] @default([])      // Catégories prioritaires ordonnées
+
+  // Notifications
+  alertOnRegression Boolean  @default(true)     // Alerte sur régression
+  alertOnGoalReached Boolean @default(true)     // Alerte objectif atteint
+  alertOnPersonalBest Boolean @default(true)    // Alerte nouveau record
+  weeklyReport      Boolean  @default(true)     // Rapport hebdomadaire
+  notificationChannel String @default("inapp")  // inapp, email, discord
+
+  // Filters & Presets
+  savedFilters      Json     @default("[]")     // Filtres sauvegardés
+  defaultFilters    Json?    // Filtres par défaut appliqués
+
+  // Quick Filters (raccourcis dashboard)
+  quickFilterMap    String?  // Map par défaut
+  quickFilterPeriod String   @default("30d")    // 7d, 30d, 90d, all
+  quickFilterMode   String   @default("all")    // ranked, casual, all
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// Objectifs personnels de l'utilisateur
+model UserGoal {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Définition de l'objectif
+  metric        String   // ex: "hsPercentage", "counterStrafeRate", "tradeRate"
+  category      String   // ex: "aim", "movement", "teamplay"
+  name          String?  // Nom personnalisé optionnel
+  description   String?  // Description de l'objectif
+
+  // Valeurs
+  startValue    Float    // Valeur au moment de création
+  currentValue  Float?   // Valeur actuelle (mise à jour automatique)
+  targetValue   Float    // Valeur cible
+
+  // Priorité et deadline
+  priority      String   @default("medium")  // high, medium, low
+  deadline      DateTime?
+
+  // Status
+  achieved      Boolean  @default(false)
+  achievedAt    DateTime?
+  progress      Float    @default(0)  // 0-100%
+
+  // Source (quelle analyse a déclenché la suggestion)
+  suggestedFrom String?  // "analysis", "coaching", "manual"
+  sourceId      String?  // ID de l'analyse/coaching source
+
+  // Historique de progression (snapshots)
+  progressHistory Json   @default("[]")  // [{ date, value, demoId? }, ...]
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId, achieved])
+  @@index([category])
+  @@index([metric])
+}
+
+// ============================================
 // JOBS (géré par pg-boss, tables auto-créées)
 // ============================================
 // pg-boss crée automatiquement ses tables :

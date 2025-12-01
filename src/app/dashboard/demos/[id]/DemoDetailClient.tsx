@@ -31,6 +31,7 @@ import { CoachingTab } from './tabs/CoachingTab';
 import { ActionPlanTab } from './tabs/ActionPlanTab';
 import { PlayersTab } from './tabs/PlayersTab';
 import { RoundsTab } from './tabs/RoundsTab';
+import type { ChartData } from '@/lib/rounds';
 
 // Shared types - should be moved to a dedicated file
 interface PlayerStats {
@@ -61,6 +62,9 @@ interface Analysis {
   economyScore?: number;
   timingScore?: number;
   decisionScore?: number;
+  movementScore?: number | null;
+  awarenessScore?: number | null;
+  teamplayScore?: number | null;
   strengths: string[];
   weaknesses: string[];
   aimAnalysis: unknown | null;
@@ -69,6 +73,9 @@ interface Analysis {
   economyAnalysis: unknown | null;
   timingAnalysis: unknown | null;
   decisionAnalysis: unknown | null;
+  movementAnalysis: unknown | null;
+  awarenessAnalysis: unknown | null;
+  teamplayAnalysis: unknown | null;
 }
 
 interface DemoData {
@@ -105,11 +112,12 @@ interface DemoDetailClientProps {
     avgKast: number;
   } | null;
   featureData: FeatureData;
+  chartData: ChartData | null;
 }
 
 type TabId = 'summary' | 'metrics' | 'rounds' | 'coaching' | 'plan' | 'players';
 
-export function DemoDetailClient({ demo, globalStats, featureData }: DemoDetailClientProps) {
+export function DemoDetailClient({ demo, globalStats, featureData, chartData }: DemoDetailClientProps) {
   const [activeTab, setActiveTab] = useState<TabId>('summary');
 
   const isProcessing = ['PENDING', 'QUEUED', 'PROCESSING', 'ANALYZING'].includes(
@@ -149,7 +157,7 @@ export function DemoDetailClient({ demo, globalStats, featureData }: DemoDetailC
 
   const mainPlayerStats = demo.playerStats.find((p) => p.isMainPlayer);
 
-  // Only include scores for enabled analyzers
+  // Only include scores for enabled analyzers (v1 + v2 categories)
   const categoryScores = demo.analysis ? {
     aim: featureData.enabledAnalyzers.includes('analysis.aim') ? demo.analysis.aimScore : undefined,
     positioning: featureData.enabledAnalyzers.includes('analysis.positioning') ? demo.analysis.positioningScore : undefined,
@@ -157,6 +165,10 @@ export function DemoDetailClient({ demo, globalStats, featureData }: DemoDetailC
     economy: featureData.enabledAnalyzers.includes('analysis.economy') ? demo.analysis.economyScore : undefined,
     timing: featureData.enabledAnalyzers.includes('analysis.timing') ? demo.analysis.timingScore : undefined,
     decision: featureData.enabledAnalyzers.includes('analysis.decision') ? demo.analysis.decisionScore : undefined,
+    // v2 categories
+    movement: featureData.enabledAnalyzers.includes('analysis.movement') ? (demo.analysis.movementScore ?? undefined) : undefined,
+    awareness: featureData.enabledAnalyzers.includes('analysis.awareness') ? (demo.analysis.awarenessScore ?? undefined) : undefined,
+    teamplay: featureData.enabledAnalyzers.includes('analysis.teamplay') ? (demo.analysis.teamplayScore ?? undefined) : undefined,
   } : null;
 
   const comparison = mainPlayerStats && globalStats ? {
@@ -269,8 +281,13 @@ export function DemoDetailClient({ demo, globalStats, featureData }: DemoDetailC
                   economy: demo.analysis.economyAnalysis,
                   timing: demo.analysis.timingAnalysis,
                   decision: demo.analysis.decisionAnalysis,
+                  // v2 analyses
+                  movement: demo.analysis.movementAnalysis,
+                  awareness: demo.analysis.awarenessAnalysis,
+                  teamplay: demo.analysis.teamplayAnalysis,
                 }}
                 playerStats={mainPlayerStats || null}
+                chartData={chartData || undefined}
               />
             )}
 

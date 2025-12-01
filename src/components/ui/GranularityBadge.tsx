@@ -2,8 +2,9 @@
 
 import { Globe, Map, FileText, Clock, Info } from 'lucide-react';
 import { ReactNode, useState } from 'react';
+import type { GranularityLevel } from '@/lib/metrics/types';
 
-export type GranularityLevel = 'global' | 'map' | 'demo' | 'round';
+export type { GranularityLevel };
 
 interface GranularityConfig {
   icon: ReactNode;

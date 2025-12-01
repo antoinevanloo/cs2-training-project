@@ -8,6 +8,7 @@ import { buildUserFeatureContext, getGlobalFeatureConfig, applyGlobalOverrides }
 import { FEATURE_DEFINITIONS } from '@/lib/features/config';
 import { recalculateAnalysisScores } from '@/lib/features/score-calculator';
 import type { UserFeaturePreferences, UserFeatureOverride } from '@/lib/features/types';
+import { prepareChartData, type ChartData } from '@/lib/rounds';
 
 export default async function DemoDetailPage({
   params,
@@ -120,6 +121,9 @@ export default async function DemoDetailPage({
             economyScore: demo.analysis!.economyScore,
             timingScore: demo.analysis!.timingScore,
             decisionScore: demo.analysis!.decisionScore,
+          movementScore: demo.analysis!.movementScore,
+            awarenessScore: demo.analysis!.awarenessScore,
+            teamplayScore: demo.analysis!.teamplayScore,
           };
           const recalculatedScores = recalculateAnalysisScores(originalScores, enabledAnalyzers);
 
@@ -131,6 +135,9 @@ export default async function DemoDetailPage({
             economyScore: enabledAnalyzers.includes('analysis.economy') ? originalScores.economyScore : undefined,
             timingScore: enabledAnalyzers.includes('analysis.timing') ? originalScores.timingScore : undefined,
             decisionScore: enabledAnalyzers.includes('analysis.decision') ? originalScores.decisionScore : undefined,
+            movementScore: enabledAnalyzers.includes('analysis.movement') ? originalScores.movementScore : undefined,
+            awarenessScore: enabledAnalyzers.includes('analysis.awareness') ? originalScores.awarenessScore : undefined,
+            teamplayScore: enabledAnalyzers.includes('analysis.teamplay') ? originalScores.teamplayScore : undefined,
             strengths: demo.analysis!.strengths || [],
             weaknesses: demo.analysis!.weaknesses || [],
             aimAnalysis: enabledAnalyzers.includes('analysis.aim') ? demo.analysis!.aimAnalysis : null,
@@ -139,6 +146,9 @@ export default async function DemoDetailPage({
             economyAnalysis: enabledAnalyzers.includes('analysis.economy') ? demo.analysis!.economyAnalysis : null,
             timingAnalysis: enabledAnalyzers.includes('analysis.timing') ? demo.analysis!.timingAnalysis : null,
             decisionAnalysis: enabledAnalyzers.includes('analysis.decision') ? demo.analysis!.decisionAnalysis : null,
+            movementAnalysis: enabledAnalyzers.includes('analysis.movement') ? demo.analysis!.movementAnalysis : null,
+            awarenessAnalysis: enabledAnalyzers.includes('analysis.awareness') ? demo.analysis!.awarenessAnalysis : null,
+            teamplayAnalysis: enabledAnalyzers.includes('analysis.teamplay') ? demo.analysis!.teamplayAnalysis : null,
           };
         })()
       : null,
@@ -166,11 +176,26 @@ export default async function DemoDetailPage({
         enabledAnalyzers,
       };
 
+  // Préparer les données de charts (côté serveur)
+  const chartData: ChartData | null = rounds.length > 0
+    ? prepareChartData(
+        rounds,
+        mainPlayer?.steamId || '',
+        mainPlayer?.team || 1,
+        demo.playerStats.map((p) => ({
+          steamId: p.steamId,
+          playerName: p.playerName,
+          teamNumber: p.team,
+        }))
+      )
+    : null;
+
   return (
     <DemoDetailClient
       demo={demoData}
       globalStats={globalStats}
       featureData={featureData}
+      chartData={chartData}
     />
   );
 }

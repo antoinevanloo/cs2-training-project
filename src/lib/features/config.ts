@@ -236,6 +236,57 @@ export const FEATURE_DEFINITIONS: Record<string, FeatureDefinition> = {
     tags: ['core', 'advanced'],
   },
 
+  'analysis.movement': {
+    id: 'analysis.movement',
+    name: 'Analyse Mouvement',
+    description: 'Analyse du mouvement et de la mécanique',
+    longDescription:
+      'Évalue votre mécanique de mouvement : counter-strafing, utilisation du crouch, déplacements en scope, vélocité au tir.',
+    category: 'analysis',
+    icon: 'Move',
+    status: 'enabled',
+    minTier: 'STARTER',
+    userToggleable: true,
+    enabledByDefault: true,
+    affectsMetrics: ['counterStrafeAccuracy', 'crouchUsage', 'scopeMovement', 'velocityAtShot'],
+    affectsScores: ['movementScore', 'overallScore'],
+    tags: ['advanced', 'mechanics'],
+  },
+
+  'analysis.awareness': {
+    id: 'analysis.awareness',
+    name: 'Analyse Conscience',
+    description: 'Analyse de la conscience situationnelle',
+    longDescription:
+      'Évalue votre conscience du jeu : attention à la bombe, réaction aux flashs, gestion de l\'information, anticipation des rotations.',
+    category: 'analysis',
+    icon: 'Eye',
+    status: 'enabled',
+    minTier: 'STARTER',
+    userToggleable: true,
+    enabledByDefault: true,
+    affectsMetrics: ['bombAwareness', 'flashAwareness', 'infoUsage', 'rotationAnticipation'],
+    affectsScores: ['awarenessScore', 'overallScore'],
+    tags: ['advanced', 'gamesense'],
+  },
+
+  'analysis.teamplay': {
+    id: 'analysis.teamplay',
+    name: 'Analyse Jeu d\'Équipe',
+    description: 'Analyse du jeu d\'équipe et de la coordination',
+    longDescription:
+      'Évalue votre jeu en équipe : trades effectués, support des entries, coordination des utilitaires, refrag timing.',
+    category: 'analysis',
+    icon: 'Users',
+    status: 'enabled',
+    minTier: 'STARTER',
+    userToggleable: true,
+    enabledByDefault: true,
+    affectsMetrics: ['tradeSuccess', 'entrySupport', 'utilityCoordination', 'refragTiming'],
+    affectsScores: ['teamplayScore', 'overallScore'],
+    tags: ['advanced', 'teamplay'],
+  },
+
   // =====================
   // COACHING
   // =====================
@@ -579,12 +630,16 @@ export const ANALYSIS_FEATURE_IDS = Object.values(FEATURE_DEFINITIONS)
 
 /**
  * Poids des catégories d'analyse pour le calcul du score global
+ * Note: Le score-calculator normalise les poids en fonction des analyseurs activés
  */
 export const ANALYSIS_WEIGHTS: Record<string, number> = {
-  'analysis.aim': 0.25,
-  'analysis.positioning': 0.20,
-  'analysis.utility': 0.15,
-  'analysis.economy': 0.10,
-  'analysis.timing': 0.15,
-  'analysis.decision': 0.15,
+  'analysis.aim': 0.20,
+  'analysis.positioning': 0.15,
+  'analysis.utility': 0.12,
+  'analysis.economy': 0.08,
+  'analysis.timing': 0.12,
+  'analysis.decision': 0.12,
+  'analysis.movement': 0.08,
+  'analysis.awareness': 0.08,
+  'analysis.teamplay': 0.05,
 };

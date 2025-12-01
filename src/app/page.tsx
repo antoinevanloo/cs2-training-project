@@ -11,6 +11,8 @@ import {
   FireIcon,
 } from '@/components/ui/icons/CS2Icons';
 
+export const dynamic = 'force-dynamic';
+
 export default function LandingPage() {
   return (
     <div className="min-h-screen bg-cs2-darker overflow-hidden">
